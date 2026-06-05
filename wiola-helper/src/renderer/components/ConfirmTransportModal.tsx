@@ -25,27 +25,33 @@ const BRANCHES: Record<number, string> = {
  * resolver wait, or halts the entire batch.
  */
 export function ConfirmTransportModal({ invoice, onClose, onSubmit }: Props) {
-  const suggested = invoice?.suggested_transport;
-  const initialTransport = (suggested?.truck_reg_number && !suggested?.is_placeholder)
-    ? suggested.truck_reg_number
-    : '';
-
-  const [value, setValue] = useState(initialTransport);
+  const [value, setValue] = useState('');
   const [hmrcMonth, setHmrcMonth] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Re-sync when modal re-opens for a different invoice
+  // Re-sync ONLY when the modal opens for a different invoice (id change).
+  // Depending on `initialTransport` would re-run on every queue:state event
+  // and overwrite the user's edits — that's the bug Wiola hit.
+  const invoiceId = invoice?.id;
   useEffect(() => {
-    setValue(initialTransport);
+    if (!invoiceId) return;
+    const s = invoice?.suggested_transport;
+    const initial = (s?.truck_reg_number && !s?.is_placeholder) ? s.truck_reg_number : '';
+    setValue(initial);
     setHmrcMonth('');
-  }, [invoice?.id, initialTransport]);
+    setSubmitting(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceId]);
 
   if (!invoice) return null;
+  const suggested = invoice.suggested_transport;
 
   const trimmed = value.trim().toUpperCase().replace(/\s+/g, '');
   const isContainer = CONTAINER_RE.test(trimmed);
-  const hmrcValid = !hmrcMonth || HMRC_MONTH_RE.test(hmrcMonth.trim());
-  const canSubmit = trimmed.length > 0 && hmrcValid && !submitting;
+  const hmrcTrimmed = hmrcMonth.trim();
+  const hmrcValid = !hmrcTrimmed || HMRC_MONTH_RE.test(hmrcTrimmed);
+  // Submit when we have either a number, or a valid HMRC month, or both.
+  const canSubmit = (trimmed.length > 0 || (hmrcTrimmed.length > 0 && hmrcValid)) && hmrcValid && !submitting;
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -141,14 +147,14 @@ export function ConfirmTransportModal({ invoice, onClose, onSubmit }: Props) {
         {/* Transport input */}
         <div className="space-y-2">
           <label className="text-xs uppercase tracking-wide text-slate-500 font-medium">
-            Numer kontenera lub auta
+            Numer kontenera lub auta <span className="text-slate-600 normal-case">— opcjonalne, jeśli podajesz miesiąc HMRC poniżej</span>
           </label>
           <input
             type="text"
             autoFocus
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="np. CMAU6487821  lub  PO-12345"
+            placeholder="np. CMAU6487821  lub  PO-12345  (lub zostaw puste)"
             className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 font-mono placeholder:text-slate-600 focus:border-blue-500 outline-none"
           />
           {trimmed && (
