@@ -223,5 +223,18 @@ Write-Host "===========================================================" -Foregr
 Write-Host "   AKTUALIZACJA ZAKONCZONA" -ForegroundColor Green
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Mozesz teraz otworzyc Wiola Helper z pulpitu."
-Write-Host ""
+
+# Auto-relaunch Wiola Helper so the user doesn't have to. Hidden runs of this
+# script via VBS won't have a console anyway; visible runs (manual cmd) finish
+# and exit.
+$electronExe = "$ROOT\wiola-helper\node_modules\electron\dist\electron.exe"
+if (Test-Path $electronExe) {
+    try {
+        Start-Process -FilePath $electronExe -ArgumentList '.' -WorkingDirectory "$ROOT\wiola-helper"
+        Ok "Wiola Helper uruchomiona ponownie"
+    } catch {
+        Warn "Nie udalo sie uruchomic Wioli: $($_.Exception.Message)"
+    }
+} else {
+    Warn "Brak electron.exe - uruchom Wiole recznie z pulpitu"
+}

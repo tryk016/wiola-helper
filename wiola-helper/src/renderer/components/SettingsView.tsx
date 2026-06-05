@@ -271,10 +271,11 @@ function UpdateSection() {
   };
 
   const handleApply = async () => {
-    if (!confirm('Aplikacja zostanie zamknięta i uruchomi się aktualizacja. Trwa 2-3 minuty. Kontynuować?')) return;
+    if (!confirm('Aplikacja zamknie się i sama uruchomi z nową wersją za ~2 minuty. Kontynuować?')) return;
     setApplying(true);
     try {
       await window.wiola.applyUpdate();
+      // Wiola Helper will quit ~1.5s after this resolves — no further UI needed.
     } catch (e) {
       setApplying(false);
       setResult({ hasUpdate: true, error: (e as Error).message });
@@ -331,7 +332,7 @@ function UpdateSection() {
               {applying ? 'Uruchamianie aktualizatora…' : '⬇ Aktualizuj teraz'}
             </button>
             <div className="text-xs text-amber-300/80">
-              Aplikacja zostanie zamknięta i uruchomi się aktualizator. Po ~2 min otwórz Wiolę z pulpitu.
+              Aplikacja zamknie się i sama uruchomi się ponownie z nową wersją za ~2 minuty. Bez czarnego okna konsoli.
             </div>
           </div>
         )}

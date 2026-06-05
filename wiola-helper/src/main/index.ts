@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +11,14 @@ import { checkForUpdate, applyUpdate, getLocalSha } from './updater';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const IS_DEV = !!process.env.VITE_DEV_SERVER_URL;
+
 let mainWindow: BrowserWindow | null = null;
 const queue = new InvoiceQueue();
+
+// In production: remove the default Electron menu entirely (no File/Edit/View/
+// Window/Help bar, no "Toggle DevTools" shortcut). In dev: keep it.
+if (!IS_DEV) Menu.setApplicationMenu(null);
 const pendingUnknownSku = new Map<string, (resp: { skip: boolean; mappings?: Record<string, string> }) => void>();
 
 function createWindow() {
@@ -28,14 +34,24 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      devTools: IS_DEV,   // PRODUCTION: DevTools cannot open — closes any error console pop-up
     },
     show: false,
   });
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  // Belt-and-braces: even if something tries to open DevTools (e.g. a runtime
+  // exception, third-party code, or a stale dev build), close it immediately
+  // in production. Combined with devTools:false this is double protection.
+  if (!IS_DEV) {
+    mainWindow.webContents.on('devtools-opened', () => {
+      mainWindow?.webContents.closeDevTools();
+    });
+  }
+
+  if (IS_DEV) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL!);
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
