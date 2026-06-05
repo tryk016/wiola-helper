@@ -1,0 +1,55 @@
+============================================================
+  PRZYGOTOWANIE PENDRIVE'A DLA WIOLI
+============================================================
+
+CO ROBISZ TY (Patryk):
+
+ 1. Skopiuj swoj plik:
+      ZRODLO:  C:\kreisel\system\.env
+      NA:      <litera pendrive>:\.env   (np. F:\.env)
+
+    UWAGA: ten plik zawiera PRODUCTION tokeny QBO i klucz Anthropic.
+           Trzymaj pendrive bezpiecznie po instalacji.
+
+ 2. Dodatkowo na pendrive moze byc plik:
+      magemar.xlsx  (opcjonalnie, mozna pominac — Wiola sciagnie z SharePoint)
+
+CO ROBI WIOLA NA SWOIM KOMPUTERZE:
+
+ 1. Wlozysz pendrive do swojego PC.
+
+ 2. Otwierasz przegladarke i wchodzisz na:
+      https://github.com/tryk016/wiola-helper
+
+ 3. Klikasz zielony przycisk "Code" → "Download ZIP"
+      LUB pobierasz tylko pojedynczy plik:
+      https://raw.githubusercontent.com/tryk016/wiola-helper/main/setup_wiola.cmd
+
+ 4. Klikasz prawym na setup_wiola.cmd → "Uruchom".
+
+ 5. Pojawi sie czarne okno — czeka 5-10 min, sciaga Node.js + kod.
+
+ 6. W trakcie pojawi sie okienko "Wybierz plik .env z pendrive" —
+    klikasz pendrive (np. F:\) → wybierasz .env → OK.
+
+ 7. Po zakonczeniu na pulpicie pojawia sie skrot "Wiola Helper".
+
+ 8. Pendrive WYJMIJ i przekaz Patrykowi z powrotem.
+    (.env zostal juz skopiowany w bezpieczne miejsce na PC.)
+
+============================================================
+
+POTEM CODZIENNIE:
+
+ 1. Rano: pobierasz Magemar.xlsx z SharePoint → zapisujesz jako:
+          C:\kreisel\magemar.xlsx
+
+ 2. Dwuklik "Wiola Helper" na pulpicie.
+
+ 3. Przeciagasz PDFy faktur Kreisla do okna programu.
+
+ 4. Klikasz "Wyslij wszystkie".
+
+ 5. Gotowe faktury same znikaja po 30 sekundach (sa w "Historii").
+
+============================================================
