@@ -115,6 +115,7 @@ export function App() {
             onClearDone={async () => { await window.wiola.clearDone(); }}
             onClearFailed={async () => { await window.wiola.clearFailed(); }}
             onRemove={async (id) => { await window.wiola.remove(id); }}
+            onRetry={async (id) => { await window.wiola.retry(id); }}
             selectedId={store.selectedId}
           />
           <Pending invoices={store.pending} onSelect={(inv) => store.select(inv.id)} />

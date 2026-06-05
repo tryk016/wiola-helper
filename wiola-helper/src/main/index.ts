@@ -7,6 +7,7 @@ import { runPipeline } from './pipeline';
 import { qboClient, magemarLookup } from './system-modules';
 import { maskedEnv, writeEnv, readPrefs, writePrefs, type EnvVars, type AppPrefs } from './settings';
 import { startOauthFlow } from './qbo-oauth';
+import { checkForUpdate, applyUpdate, getLocalSha } from './updater';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -101,6 +102,15 @@ ipcMain.handle('queue:enqueueForce', (_, paths: string[]) => {
   queue.enqueue(paths);
   return queue.state();
 });
+
+ipcMain.handle('queue:retry', (_, id: string) => {
+  queue.retry(id);
+  return queue.state();
+});
+
+ipcMain.handle('update:check', () => checkForUpdate());
+ipcMain.handle('update:apply', () => applyUpdate());
+ipcMain.handle('update:localVersion', () => getLocalSha());
 
 ipcMain.handle('queue:remove', (_, id: string) => {
   queue.remove(id);

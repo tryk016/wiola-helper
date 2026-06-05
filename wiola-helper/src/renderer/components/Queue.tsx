@@ -8,6 +8,7 @@ interface Props {
   onClearDone?: () => void;
   onClearFailed?: () => void;
   onRemove?: (id: string) => void;
+  onRetry?: (id: string) => void;
   selectedId?: string;
 }
 
@@ -24,7 +25,7 @@ const statusBadge = (status: Invoice['status']) => {
   return map[status] || map.waiting;
 };
 
-export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, onClearFailed, onRemove, selectedId }: Props) {
+export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, onClearFailed, onRemove, onRetry, selectedId }: Props) {
   const hasItems = invoices.length > 0;
   const canProcess = stats.waiting > 0;
 
@@ -76,6 +77,7 @@ export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, on
             const badge = statusBadge(inv.status);
             const isSelected = inv.id === selectedId;
             const removable = ['failed', 'done', 'waiting', 'unknown_sku'].includes(inv.status);
+            const retryable = ['failed', 'ambiguous', 'unknown_sku'].includes(inv.status);
             return (
               <div
                 key={inv.id}
@@ -122,6 +124,15 @@ export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, on
                     </div>
                   </div>
                 </button>
+                {retryable && onRetry && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRetry(inv.id); }}
+                    className="px-3 opacity-0 group-hover:opacity-100 text-slate-500 hover:text-emerald-400 transition-all text-lg"
+                    title="Spróbuj ponownie"
+                  >
+                    🔄
+                  </button>
+                )}
                 {removable && onRemove && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onRemove(inv.id); }}

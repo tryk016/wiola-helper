@@ -1,0 +1,85 @@
+// Self-update mechanism via GitHub.
+//
+// On install/update, C:\kreisel\.version is written with the commit SHA of
+// what was deployed. checkForUpdate() compares it against the latest commit
+// on main; applyUpdate() launches update_wiola.cmd and quits the app.
+
+import { app } from 'electron';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import axios from 'axios';
+
+const VERSION_FILE = 'C:\\kreisel\\.version';
+const UPDATE_SCRIPT = 'C:\\kreisel\\update_wiola.cmd';
+const REPO_API_URL =
+  'https://api.github.com/repos/tryk016/wiola-helper/commits/main';
+
+export interface UpdateCheckResult {
+  hasUpdate: boolean;
+  localSha?: string;
+  remoteSha?: string;
+  remoteMessage?: string;
+  remoteDate?: string;
+  error?: string;
+}
+
+export function getLocalSha(): string | undefined {
+  try {
+    if (!fs.existsSync(VERSION_FILE)) return undefined;
+    const sha = fs.readFileSync(VERSION_FILE, 'utf8').trim();
+    return sha || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function checkForUpdate(): Promise<UpdateCheckResult> {
+  const localSha = getLocalSha();
+  try {
+    const r = await axios.get(REPO_API_URL, {
+      headers: { 'User-Agent': 'WiolaHelper', Accept: 'application/vnd.github+json' },
+      timeout: 10000,
+    });
+    const remoteSha: string = r.data?.sha;
+    const remoteMessage: string = r.data?.commit?.message || '';
+    const remoteDate: string = r.data?.commit?.author?.date || '';
+    if (!remoteSha) {
+      return { hasUpdate: false, localSha, error: 'Brak SHA w odpowiedzi GitHub' };
+    }
+    return {
+      hasUpdate: !localSha || localSha !== remoteSha,
+      localSha,
+      remoteSha,
+      remoteMessage: remoteMessage.split('\n')[0], // first line of commit message
+      remoteDate,
+    };
+  } catch (e) {
+    const err = e as Error & { response?: { status?: number } };
+    return {
+      hasUpdate: false,
+      localSha,
+      error: err.response?.status
+        ? `GitHub API ${err.response.status}`
+        : err.message,
+    };
+  }
+}
+
+export function applyUpdate(): { launched: boolean; error?: string } {
+  if (!fs.existsSync(UPDATE_SCRIPT)) {
+    return { launched: false, error: `Brak skryptu: ${UPDATE_SCRIPT}` };
+  }
+  try {
+    // Spawn detached so the script survives app.quit()
+    spawn('cmd.exe', ['/c', 'start', '', UPDATE_SCRIPT], {
+      detached: true,
+      shell: false,
+      stdio: 'ignore',
+    }).unref();
+  } catch (e) {
+    return { launched: false, error: (e as Error).message };
+  }
+  // Give the launcher a moment to spawn, then quit
+  setTimeout(() => app.quit(), 800);
+  return { launched: true };
+}

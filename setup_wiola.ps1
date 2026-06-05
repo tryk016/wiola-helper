@@ -89,6 +89,15 @@ if (Test-Path "$env:TEMP\wiola_magemar.bak") {
 }
 Ok "Kod zainstalowany w $ROOT"
 
+# Record installed commit SHA for in-app update check
+try {
+    $commitInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/$REPO_BRANCH" -Headers @{ 'User-Agent' = 'WiolaHelper' } -TimeoutSec 10
+    Set-Content -Path "$ROOT\.version" -Value $commitInfo.sha -Encoding ASCII -NoNewline
+    Ok "Zapisano wersje: $($commitInfo.sha.Substring(0,8))"
+} catch {
+    Warn "Nie udalo sie odczytac SHA z GitHub: $($_.Exception.Message)"
+}
+
 # --- 3. download Node.js portable ----------------------------------------
 Step 3 9 "Pobieranie Node.js $NODE_VERSION (portable)"
 $nodeDir = "$ROOT\nodejs"

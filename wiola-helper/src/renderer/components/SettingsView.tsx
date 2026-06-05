@@ -207,6 +207,9 @@ export function SettingsView({ onClose }: Props) {
           </div>
         </Section>
 
+        {/* Aktualizacje */}
+        <UpdateSection />
+
         {/* Support / kontakt */}
         <Section title="🆘 Pomoc i wsparcie" subtitle="Skontaktuj się z administratorem aplikacji">
           <div className="space-y-3">
@@ -236,6 +239,112 @@ export function SettingsView({ onClose }: Props) {
         </Section>
       </div>
     </div>
+  );
+}
+
+function UpdateSection() {
+  const [localSha, setLocalSha] = useState<string | undefined>(undefined);
+  const [checking, setChecking] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [result, setResult] = useState<{
+    hasUpdate: boolean;
+    remoteSha?: string;
+    remoteMessage?: string;
+    remoteDate?: string;
+    error?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    window.wiola.getLocalVersion().then((sha: string | undefined) => setLocalSha(sha));
+  }, []);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    setResult(null);
+    try {
+      const r = await window.wiola.checkForUpdate();
+      setResult(r);
+      if (r.localSha) setLocalSha(r.localSha);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!confirm('Aplikacja zostanie zamknięta i uruchomi się aktualizacja. Trwa 2-3 minuty. Kontynuować?')) return;
+    setApplying(true);
+    try {
+      await window.wiola.applyUpdate();
+    } catch (e) {
+      setApplying(false);
+      setResult({ hasUpdate: true, error: (e as Error).message });
+    }
+  };
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-200">🔄 Aktualizacje</h3>
+        <p className="text-xs text-slate-400 mt-0.5">Pobierz najnowszą wersję z GitHub</p>
+      </div>
+      <div className="space-y-3">
+        <div className="p-3 rounded-lg bg-slate-800 text-sm space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-400">Twoja wersja:</span>
+            <span className="font-mono text-slate-300">{localSha ? localSha.substring(0, 8) : '— (przed pierwszą aktualizacją)'}</span>
+          </div>
+          {result?.remoteSha && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">Wersja na GitHub:</span>
+              <span className="font-mono text-slate-300">{result.remoteSha.substring(0, 8)}</span>
+            </div>
+          )}
+          {result?.remoteMessage && (
+            <div className="text-xs text-slate-400 pt-1 border-t border-slate-700">
+              <span className="font-medium text-slate-300">Najnowsza zmiana:</span> {result.remoteMessage}
+            </div>
+          )}
+        </div>
+
+        {result?.error && (
+          <div className="p-3 rounded-lg bg-red-950/40 border border-red-900/50 text-sm text-red-300">
+            ⚠ {result.error}
+          </div>
+        )}
+
+        {result && !result.error && !result.hasUpdate && (
+          <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-900/50 text-sm text-emerald-300">
+            ✓ Masz najnowszą wersję
+          </div>
+        )}
+
+        {result?.hasUpdate && !result.error && (
+          <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-900/50 text-sm space-y-2">
+            <div className="text-amber-200 font-medium">📦 Dostępna nowa wersja!</div>
+            <button
+              onClick={handleApply}
+              disabled={applying}
+              className={`w-full px-4 py-2 rounded-md text-sm font-medium transition ${
+                applying ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-amber-600 hover:bg-amber-500 text-white'
+              }`}
+            >
+              {applying ? 'Uruchamianie aktualizatora…' : '⬇ Aktualizuj teraz'}
+            </button>
+            <div className="text-xs text-amber-300/80">
+              Aplikacja zostanie zamknięta i uruchomi się aktualizator. Po ~2 min otwórz Wiolę z pulpitu.
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleCheck}
+          disabled={checking || applying}
+          className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 rounded-md text-sm transition"
+        >
+          {checking ? 'Sprawdzanie…' : '🔍 Sprawdź aktualizacje'}
+        </button>
+      </div>
+    </section>
   );
 }
 

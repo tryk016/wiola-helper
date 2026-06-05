@@ -229,6 +229,32 @@ export class InvoiceQueue extends EventEmitter {
     this.emit('change');
   }
 
+  // Reset a failed/ambiguous/unknown_sku invoice back to waiting so it can be re-processed.
+  // Clears error message and progress. If invoice was in pending, moves it back to queue.
+  retry(id: string) {
+    let inv = this.queue.find(q => q.id === id);
+    let fromPending = false;
+    if (!inv) {
+      inv = this.pending.find(p => p.id === id);
+      fromPending = !!inv;
+    }
+    if (!inv) return;
+
+    const retryable: InvoiceStatus[] = ['failed', 'ambiguous', 'unknown_sku'];
+    if (!retryable.includes(inv.status)) return;
+
+    inv.status = 'waiting';
+    delete inv.error;
+    delete inv.progress;
+
+    if (fromPending) {
+      this.pending = this.pending.filter(p => p.id !== id);
+      this.queue.push(inv);
+    }
+    this.save();
+    this.emit('change');
+  }
+
   clearDone() {
     this.queue = this.queue.filter(q => q.status !== 'done');
     this.save();

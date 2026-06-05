@@ -130,6 +130,15 @@ Get-ChildItem $repoRoot -Recurse -File | ForEach-Object {
 }
 Ok "Zaktualizowano $count plikow"
 
+# Record new commit SHA
+try {
+    $commitInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/$REPO_BRANCH" -Headers @{ 'User-Agent' = 'WiolaHelper' } -TimeoutSec 10
+    Set-Content -Path "$ROOT\.version" -Value $commitInfo.sha -Encoding ASCII -NoNewline
+    Ok "Wersja: $($commitInfo.sha.Substring(0,8))"
+} catch {
+    Warn "Nie udalo sie odczytac SHA z GitHub: $($_.Exception.Message)"
+}
+
 # --- 5. npm install if package.json changed ------------------------------
 Step 5 6 "Sprawdzanie zaleznosci"
 if ($systemPkgChanged) {

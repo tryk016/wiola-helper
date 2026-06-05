@@ -8,9 +8,22 @@ interface WiolaApi {
   enqueue: (paths: string[]) => Promise<unknown>;
   enqueueForce: (paths: string[]) => Promise<unknown>;
   remove: (id: string) => Promise<void>;
+  retry: (id: string) => Promise<void>;
   clearDone: () => Promise<void>;
   clearFailed: () => Promise<void>;
   clearHistory: () => Promise<void>;
+  openLogFolder: () => Promise<{ opened: string }>;
+
+  checkForUpdate: () => Promise<{
+    hasUpdate: boolean;
+    localSha?: string;
+    remoteSha?: string;
+    remoteMessage?: string;
+    remoteDate?: string;
+    error?: string;
+  }>;
+  applyUpdate: () => Promise<{ launched: boolean; error?: string }>;
+  getLocalVersion: () => Promise<string | undefined>;
 
   getEnv: () => Promise<Record<string, string>>;
   setEnv: (updates: Record<string, string>) => Promise<Record<string, string>>;
