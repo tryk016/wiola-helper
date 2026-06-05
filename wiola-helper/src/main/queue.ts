@@ -93,6 +93,24 @@ export class InvoiceQueue extends EventEmitter {
     for (const p of this.pending) {
       if (p.added_at) p.days_waiting = Math.floor((now - p.added_at) / 86400000);
     }
+
+    // Reset stuck parsing/processing items from previous session.
+    // If the app was restarted mid-pipeline, the in-memory work was lost but
+    // the status was persisted. Mark them failed so the retry button (🔄) appears.
+    let hungReset = 0;
+    for (const inv of this.queue) {
+      if (inv.status === 'parsing' || inv.status === 'processing') {
+        inv.status = 'failed';
+        inv.error = 'Aplikacja zrestartowana w trakcie przetwarzania — kliknij 🔄 aby spróbować ponownie';
+        delete inv.progress;
+        hungReset++;
+      }
+    }
+    if (hungReset > 0) {
+      console.warn(`Resetowanie ${hungReset} faktur zawieszonych w trakcie parsowania/przetwarzania`);
+      this.save();
+    }
+
     // Migrate any done items in queue → history immediately (cleanup from older versions)
     this.archiveDone(true);
   }

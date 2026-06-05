@@ -182,6 +182,10 @@ async function parseKreiselWithLlm(pdfPath) {
   const pdfBase64 = pdfBytes.toString('base64');
 
   const t0 = Date.now();
+  // Hard 2-minute timeout — beyond this the request is almost certainly hung.
+  // Without this, axios under the hood waits indefinitely on a stalled socket
+  // and the GUI shows "parsing..." forever.
+  const LLM_TIMEOUT_MS = 120_000;
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 8192,
@@ -207,6 +211,8 @@ async function parseKreiselWithLlm(pdfPath) {
         ],
       },
     ],
+  }, {
+    timeout: LLM_TIMEOUT_MS,
   });
   const ms = Date.now() - t0;
 
