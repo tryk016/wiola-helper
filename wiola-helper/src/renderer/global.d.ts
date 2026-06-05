@@ -9,6 +9,7 @@ interface WiolaApi {
   enqueueForce: (paths: string[]) => Promise<unknown>;
   remove: (id: string) => Promise<void>;
   retry: (id: string) => Promise<void>;
+  skipDelay: (id: string) => Promise<boolean>;
   resolveAmbiguousMonth: (id: string, hmrcMonth: string) => Promise<unknown>;
   clearDone: () => Promise<void>;
   clearFailed: () => Promise<void>;

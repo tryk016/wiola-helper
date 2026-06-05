@@ -13,6 +13,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const IS_DEV = !!process.env.VITE_DEV_SERVER_URL;
 
+// Random delay manager — between invoice posts, we sleep [min..max] minutes
+// so QBO history doesn't show "20 bills posted in 1 minute" (audit red flag).
+// User can click "Wyślij teraz" on the delayed invoice to skip the wait.
+const delaySkippers = new Map<string, () => void>();
+function sleepWithSkip(invoiceId: string, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      delaySkippers.delete(invoiceId);
+      resolve();
+    }, ms);
+    delaySkippers.set(invoiceId, () => {
+      clearTimeout(timer);
+      delaySkippers.delete(invoiceId);
+      resolve();
+    });
+  });
+}
+
 // Global safety nets so a stray exception (e.g. "Object has been destroyed"
 // from a stale setTimeout reaching a closed BrowserWindow) does NOT take down
 // the whole app with the system "A JavaScript error occurred" dialog.
@@ -192,15 +210,36 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
     .sort((a, b) => sortKey(a.kreisel_ref!) - sortKey(b.kreisel_ref!));
 
   // Phase 3: post serially, HALT on any failure to preserve Kreisel/EWI Pro numbering correlation
+  // Between successful posts, insert a random delay (anti-automation pattern).
+  const prefs = readPrefs();
+  const delayMinMs = Math.max(0, prefs.delayMinMinutes * 60_000);
+  const delayMaxMs = Math.max(delayMinMs, prefs.delayMaxMinutes * 60_000);
+  // Dry-run mode skips delays entirely (nothing reaches QBO so audit risk = 0)
+  const delaysEnabled = post && delayMaxMs > 0;
+
   let processed = 0;
   let halted = false;
   let haltedAt: string | undefined;
-  for (const inv of sorted) {
+  let postsSinceStart = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const inv = sorted[i];
     if (halted) {
-      // Mark remaining as waiting-blocked (don't process out of order)
       queue.update({ id: inv.id, status: 'waiting', error: `Wstrzymane — czeka na ${haltedAt}` });
       continue;
     }
+
+    // Random delay BEFORE each successful post except the very first.
+    // We do it before so the next-up invoice visibly shows "Następna za X min".
+    if (delaysEnabled && postsSinceStart > 0) {
+      const range = delayMaxMs - delayMinMs;
+      const delay = delayMinMs + Math.floor(Math.random() * (range + 1));
+      const until = Date.now() + delay;
+      queue.update({ id: inv.id, status: 'delay', delay_until: until });
+      console.log(`[delay] ${inv.kreisel_ref} - czekam ${Math.round(delay/60_000)} min (do ${new Date(until).toLocaleTimeString()})`);
+      await sleepWithSkip(inv.id, delay);
+      queue.update({ id: inv.id, status: 'waiting', delay_until: undefined });
+    }
+
     await runPipeline(inv.id, inv.file, post, {
       onProgress: (patch) => queue.update(patch as Partial<InvoiceState>),
       onUnknownSku: ({ fileId, unmapped }) => new Promise(resolve => {
@@ -212,15 +251,22 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
     });
     const inAfter = queue.state().queue.find(q => q.id === inv.id) || queue.state().pending.find(p => p.id === inv.id);
     if (inAfter && ['failed', 'ambiguous', 'unknown_sku'].includes(inAfter.status)) {
-      // STOP — preserve numbering invariant
       halted = true;
       haltedAt = inv.kreisel_ref;
       console.warn(`Halted at ${inv.kreisel_ref} (status=${inAfter.status}); remaining ${sorted.length - processed - 1} held.`);
     }
     processed++;
+    postsSinceStart++;
   }
 
   return { processed, halted, haltedAt };
+});
+
+// Skip a delay — user clicked "Wyślij teraz" on a delayed invoice.
+ipcMain.handle('queue:skipDelay', (_, id: string) => {
+  const skip = delaySkippers.get(id);
+  if (skip) skip();
+  return true;
 });
 
 ipcMain.handle('modal:unknownSku:respond', (_, fileId: string, resp: { skip: boolean; mappings?: Record<string, string> }) => {

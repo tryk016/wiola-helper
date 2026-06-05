@@ -5,7 +5,8 @@ export type InvoiceStatus =
   | 'done'
   | 'failed'
   | 'ambiguous'
-  | 'unknown_sku';
+  | 'unknown_sku'
+  | 'delay';
 
 export interface ParsedLine {
   ewi_sku: string;
@@ -39,6 +40,7 @@ export interface Invoice {
   completed_at?: number;
   container?: string;
   error?: string;
+  delay_until?: number;  // unix ms — when the anti-automation delay ends
 }
 
 export interface Health {

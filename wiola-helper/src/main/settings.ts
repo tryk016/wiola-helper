@@ -12,12 +12,19 @@ export interface AppPrefs {
   defaultMode: 'dry-run' | 'post';
   autoArchiveSeconds: number;
   showLineDetails: boolean;
+  // Random anti-automation delay between consecutive invoice posts.
+  // Each post (except the first) waits a uniformly-random duration in
+  // [delayMinMinutes, delayMaxMinutes]. Set min=max=0 to disable.
+  delayMinMinutes: number;
+  delayMaxMinutes: number;
 }
 
 const DEFAULT_PREFS: AppPrefs = {
   defaultMode: 'post',
   autoArchiveSeconds: 30,
   showLineDetails: true,
+  delayMinMinutes: 4,
+  delayMaxMinutes: 10,
 };
 
 export interface EnvVars {

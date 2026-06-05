@@ -12,6 +12,7 @@ const api = {
   enqueueForce: (paths: string[]) => ipcRenderer.invoke('queue:enqueueForce', paths),
   remove: (id: string) => ipcRenderer.invoke('queue:remove', id),
   retry: (id: string) => ipcRenderer.invoke('queue:retry', id),
+  skipDelay: (id: string) => ipcRenderer.invoke('queue:skipDelay', id),
   resolveAmbiguousMonth: (id: string, hmrcMonth: string) =>
     ipcRenderer.invoke('pending:resolveMonth', id, hmrcMonth),
   checkForUpdate: () => ipcRenderer.invoke('update:check'),

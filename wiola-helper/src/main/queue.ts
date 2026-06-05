@@ -8,7 +8,7 @@ import { app } from 'electron';
 
 export type InvoiceStatus =
   | 'waiting' | 'parsing' | 'processing' | 'done' | 'failed'
-  | 'ambiguous' | 'unknown_sku';
+  | 'ambiguous' | 'unknown_sku' | 'delay';
 
 export interface ParsedLine {
   ewi_sku: string;
@@ -55,6 +55,9 @@ export interface InvoiceState {
   // month via the "wybór miesiąca" modal. If present, pipeline skips
   // resolveImport() and uses this value directly.
   manual_hmrc_month?: string;
+  // Timestamp (unix ms) when the random anti-automation delay expires.
+  // Renderer counts down to this so the user sees "Następna za 5:23".
+  delay_until?: number;
 }
 
 const STATE_DIR = path.join(app.getPath('userData'), 'state');
@@ -108,6 +111,12 @@ export class InvoiceQueue extends EventEmitter {
         inv.error = 'Aplikacja zrestartowana w trakcie przetwarzania — kliknij 🔄 aby spróbować ponownie';
         delete inv.progress;
         hungReset++;
+      }
+      // Delay state is in-memory only; on restart, drop it and put item back as 'waiting'
+      if (inv.status === 'delay') {
+        inv.status = 'waiting';
+        delete inv.delay_until;
+        delete inv.progress;
       }
     }
     if (hungReset > 0) {

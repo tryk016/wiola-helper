@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Invoice } from '../types';
 
 interface Props {
@@ -21,9 +22,42 @@ const statusBadge = (status: Invoice['status']) => {
     failed: { icon: '❌', color: 'text-red-400', label: 'Błąd' },
     ambiguous: { icon: '⏸', color: 'text-amber-400', label: 'Granica miesiąca' },
     unknown_sku: { icon: '⚠️', color: 'text-amber-400', label: 'Nieznany produkt' },
+    delay: { icon: '⏱', color: 'text-purple-300', label: 'Czekam (anti-bot)' },
   };
   return map[status] || map.waiting;
 };
+
+// Live countdown to a future timestamp. Updates every second.
+function CountdownBadge({ until, onSkip }: { until: number; onSkip: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const remaining = Math.max(0, until - now);
+  const mins = Math.floor(remaining / 60000);
+  const secs = Math.floor((remaining % 60000) / 1000);
+  return (
+    <div className="mt-1.5 flex items-center gap-2">
+      <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-purple-500 transition-all"
+          style={{ width: `${Math.min(100, 100 - (remaining / (until - (until - 600000))) * 100)}%` }}
+        />
+      </div>
+      <span className="text-xs font-mono text-purple-300 tabular-nums">
+        {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+      </span>
+      <button
+        onClick={(e) => { e.stopPropagation(); onSkip(); }}
+        className="px-2 py-0.5 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded transition-colors"
+        title="Pomiń opóźnienie i wyślij teraz"
+      >
+        Wyślij teraz
+      </button>
+    </div>
+  );
+}
 
 export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, onClearFailed, onRemove, onRetry, selectedId }: Props) {
   const hasItems = invoices.length > 0;
@@ -120,6 +154,12 @@ export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, on
                             style={{ width: `${inv.progress}%` }}
                           />
                         </div>
+                      )}
+                      {inv.status === 'delay' && inv.delay_until && (
+                        <CountdownBadge
+                          until={inv.delay_until}
+                          onSkip={() => window.wiola.skipDelay(inv.id)}
+                        />
                       )}
                     </div>
                   </div>

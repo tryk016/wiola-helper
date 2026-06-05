@@ -22,6 +22,8 @@ interface Prefs {
   defaultMode?: 'dry-run' | 'post';
   autoArchiveSeconds?: number;
   showLineDetails?: boolean;
+  delayMinMinutes?: number;
+  delayMaxMinutes?: number;
 }
 
 export function SettingsView({ onClose }: Props) {
@@ -204,6 +206,43 @@ export function SettingsView({ onClose }: Props) {
                 max={3600}
               />
             </label>
+
+            <div className="p-3 rounded-lg bg-slate-800 space-y-2">
+              <div>
+                <div className="text-sm font-medium">⏱ Losowe opóźnienie między fakturami</div>
+                <div className="text-xs text-slate-400">
+                  Aby QBO history nie wyglądało jak automat (10 faktur w 30s). 0 = wyłączone.
+                  Dotyczy tylko trybu Posting (realne); dry-run zawsze pomija delay.
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs text-slate-400">Min</span>
+                <input
+                  type="number"
+                  value={prefs.delayMinMinutes ?? 4}
+                  onChange={e => {
+                    const v = Math.max(0, parseInt(e.target.value) || 0);
+                    handlePrefChange({ delayMinMinutes: v });
+                  }}
+                  className="w-16 px-2 py-1 bg-slate-700 border border-slate-600 rounded-md text-sm text-center"
+                  min={0}
+                  max={60}
+                />
+                <span className="text-xs text-slate-400">— Max</span>
+                <input
+                  type="number"
+                  value={prefs.delayMaxMinutes ?? 10}
+                  onChange={e => {
+                    const v = Math.max(0, parseInt(e.target.value) || 0);
+                    handlePrefChange({ delayMaxMinutes: v });
+                  }}
+                  className="w-16 px-2 py-1 bg-slate-700 border border-slate-600 rounded-md text-sm text-center"
+                  min={0}
+                  max={60}
+                />
+                <span className="text-xs text-slate-400">minut</span>
+              </div>
+            </div>
           </div>
         </Section>
 
