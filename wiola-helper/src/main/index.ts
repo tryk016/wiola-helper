@@ -255,6 +255,19 @@ ipcMain.handle('shell:openPath', (_, p: string) => {
   return shell.openPath(p);
 });
 
+ipcMain.handle('support:openLogFolder', () => {
+  const { shell } = require('electron');
+  // Show the log file in Explorer (selected)
+  const logPath = 'C:/kreisel/log.txt';
+  if (fs.existsSync(logPath)) {
+    shell.showItemInFolder(logPath);
+    return { opened: logPath };
+  }
+  // Fall back to the kreisel root folder
+  shell.openPath('C:/kreisel');
+  return { opened: 'C:/kreisel' };
+});
+
 ipcMain.handle('log:read', (_, lines: number = 500) => {
   const logPath = 'C:/kreisel/log.txt';
   try {

@@ -206,6 +206,34 @@ export function SettingsView({ onClose }: Props) {
             </label>
           </div>
         </Section>
+
+        {/* Support / kontakt */}
+        <Section title="🆘 Pomoc i wsparcie" subtitle="Skontaktuj się z administratorem aplikacji">
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-slate-800 text-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">E-mail wsparcia:</span>
+                <a
+                  href="mailto:patrick.baran@ewistore.co.uk?subject=Wiola%20Helper%20-%20Wsparcie"
+                  className="text-blue-400 hover:text-blue-300 underline font-mono"
+                >
+                  patrick.baran@ewistore.co.uk
+                </a>
+              </div>
+              <div className="text-xs text-slate-400">
+                Przy zgłaszaniu błędu dołącz log aplikacji (przycisk poniżej) — zawiera on identyfikator
+                <code className="px-1 bg-slate-700 rounded mx-1">intuit_tid</code>
+                wymagany przez support Intuit do diagnostyki problemów z QuickBooks Online.
+              </div>
+            </div>
+            <button
+              onClick={() => window.wiola.openLogFolder?.()}
+              className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md text-sm transition"
+            >
+              📁 Otwórz folder z logami
+            </button>
+          </div>
+        </Section>
       </div>
     </div>
   );

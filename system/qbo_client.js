@@ -91,6 +91,23 @@ async function getClient(which) {
     timeout: 30000,
   });
 
+  // Capture intuit_tid response header for support troubleshooting
+  // (Intuit recommends capturing this on every response — both success and error.)
+  const captureTid = (resp) => {
+    try {
+      const tid = resp && resp.headers && (resp.headers['intuit_tid'] || resp.headers['Intuit_Tid']);
+      if (tid) {
+        const url = resp.config && resp.config.url;
+        const status = resp.status;
+        process.stderr.write(`[QBO intuit_tid=${tid} status=${status} ${name} ${url || ''}]\n`);
+      }
+    } catch (_) { /* never let logging break the request */ }
+  };
+  http.interceptors.response.use(
+    (resp) => { captureTid(resp); return resp; },
+    (err)  => { captureTid(err && err.response); return Promise.reject(err); }
+  );
+
   return {
     name,
     realmId,

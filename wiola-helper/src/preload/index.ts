@@ -38,6 +38,7 @@ const api = {
   healthCheck: () => ipcRenderer.invoke('health:check'),
   appVersion: () => ipcRenderer.invoke('app:version'),
   openPath: (p: string) => ipcRenderer.invoke('shell:openPath', p),
+  openLogFolder: () => ipcRenderer.invoke('support:openLogFolder'),
 
   // Event subscription
   on: (channel: string, cb: (...args: unknown[]) => void): (() => void) | undefined => {
