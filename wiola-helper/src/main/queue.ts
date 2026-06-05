@@ -31,6 +31,7 @@ export interface InvoiceState {
   progress?: number;
   kreisel_ref?: string;
   invoice_no?: string;
+  issue_date?: string;   // Kreisel-side issue date, YYYY-MM-DD (parser output)
   amount_pln?: number;
   amount_gbp?: number;
   lines?: number;        // count (for backward compat)

@@ -110,6 +110,7 @@ export async function runPipeline(
       amount_pln: k.total_pln,
       lines: k.lines.length,
       container: k.container ?? undefined,
+      issue_date: k.issue_date,
     });
 
     // If user provided a container override (rare — used when PDF parser missed

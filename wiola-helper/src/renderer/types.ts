@@ -32,6 +32,7 @@ export interface Invoice {
   amount_pln?: number;
   amount_gbp?: number;
   invoice_no?: string;
+  issue_date?: string;
   lines?: number;
   parsed_lines?: ParsedLine[];
   hmrc_month?: string;

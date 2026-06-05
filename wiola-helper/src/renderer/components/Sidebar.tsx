@@ -32,6 +32,7 @@ export function Sidebar({ invoice }: Props) {
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <DataItem label="Status" value={invoice.status} />
         {invoice.invoice_no && <DataItem label="EWI Pro Invoice" value={`#${invoice.invoice_no}`} mono className="text-emerald-300" />}
+        {invoice.issue_date && <DataItem label="Data wystawienia" value={invoice.issue_date} mono />}
         {invoice.amount_pln !== undefined && <DataItem label="Razem PLN" value={`zł${fmtPln(invoice.amount_pln)}`} mono />}
         {invoice.amount_gbp !== undefined && <DataItem label="Razem GBP" value={`£${fmtGbp(invoice.amount_gbp)}`} mono className="text-emerald-300" />}
         {invoice.hmrc_month && <DataItem label="HMRC miesiąc" value={invoice.hmrc_month} mono />}
