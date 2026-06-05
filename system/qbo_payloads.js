@@ -226,12 +226,13 @@ async function buildKreiselBill(proClient, parsedKreisel, hmrcRate, dueDays = 90
   const exchangeRate = roundHalfUp(1 / hmrcRate, 7);
 
   const lines = [];
-  // Category details — classification only. QBO UI on production shows blank Amount
-  // because the line is just a classifier (tax code only, no expense). We try omitting
-  // Amount entirely first; if QBO rejects, fall back to 0.
+  // Category details — classification only. QBO API requires Line.Amount on every
+  // line (Error 2020 if null/missing), so we send 0.00. UI shows "0.00" rather
+  // than blank; the production layout will still work because Item lines below
+  // carry the actual money.
   lines.push({
     DetailType: 'AccountBasedExpenseLineDetail',
-    Amount: null,  // explicit null — QBO might accept and show blank in UI
+    Amount: 0,
     AccountBasedExpenseLineDetail: {
       AccountRef: { value: importAccId },
       TaxCodeRef: { value: tax.id },
