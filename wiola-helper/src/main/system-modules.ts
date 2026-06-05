@@ -45,6 +45,10 @@ console.log('[wiola-helper] system path:', SYSTEM_PATH);
 export const parseKreiselWithLlm = require(`${SYSTEM_PATH}/parse_kreisel_llm.js`).parseKreiselWithLlm as
   (pdfPath: string) => Promise<unknown>;
 
+// Cheap text-only kreisel_ref extraction (no LLM); null if PDF is a scan.
+export const quickKreiselRef = require(`${SYSTEM_PATH}/parse_kreisel_llm.js`).quickKreiselRef as
+  (pdfPath: string) => Promise<string | null>;
+
 export const resolveImport = require(`${SYSTEM_PATH}/resolve_import.js`).resolveImport as
   (refOrParsed: unknown) => Promise<unknown>;
 

@@ -351,7 +351,35 @@ async function parseKreiselWithLlm(pdfPath) {
   };
 }
 
-module.exports = { parseKreiselWithLlm };
+/**
+ * Cheap text-only extraction of just the Kreisel invoice reference.
+ * Used by the GUI's discovery phase to sort the batch by FSE number
+ * BEFORE running the full LLM pipeline, so we don't pay 2x LLM calls
+ * per invoice (one for sort, one for full parse).
+ *
+ * Returns `FSE-NNN/YYYY/EXP` on hit, null on miss (scanned PDF
+ * without a text layer, or unusual format). Caller can fall back to
+ * the LLM if null is returned.
+ */
+async function quickKreiselRef(pdfPath) {
+  try {
+    const pdfBytes = fs.readFileSync(pdfPath);
+    const text = await extractPdfText(pdfBytes);
+    if (!text || text.length < 100) return null;
+    // Header form: "Faktura eksportowa VAT nr (S)FSE-123/2026/EXP"
+    let m = /Faktura\s+eksportowa[^a-z]*?VAT[^\d]*?\(?S?\)?FSE-?(\d+\/\d{4}\/EXP)/i.exec(text);
+    if (m) return `FSE-${m[1]}`;
+    // Looser fallback anywhere in the text
+    m = /FSE-?(\d+\/\d{4}\/EXP)/i.exec(text);
+    if (m) return `FSE-${m[1]}`;
+    return null;
+  } catch (e) {
+    console.warn('[parse_kreisel_llm] quickKreiselRef failed:', e.message);
+    return null;
+  }
+}
+
+module.exports = { parseKreiselWithLlm, quickKreiselRef };
 
 if (require.main === module) {
   (async () => {

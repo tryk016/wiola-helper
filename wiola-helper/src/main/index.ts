@@ -207,13 +207,25 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
   const waiting = queue.state().queue.filter(q => q.status === 'waiting');
   if (!waiting.length) return { processed: 0 };
 
-  // Quick-parse missing kreisel_refs (just to know sort order)
+  // Quick-parse missing kreisel_refs (just to know sort order).
+  // Step 1: try a cheap text-layer regex (no LLM call); this handles all
+  // text-based PDFs (the new Kreisel format) in ~50ms with zero API cost.
+  // Step 2: fall back to the LLM ONLY for scanned PDFs (no text layer)
+  // where the regex returns null. The full-fidelity LLM parse still runs
+  // inside pipeline.ts for every invoice — we just avoid running it TWICE.
+  const sysmod = await import('./system-modules');
   for (const inv of waiting) {
     if (inv.kreisel_ref) continue;
     queue.update({ id: inv.id, status: 'parsing', progress: 5 });
     try {
-      const k = await (await import('./system-modules')).parseKreiselWithLlm(inv.file) as { kreisel_ref?: string; invoice_no: string };
-      queue.update({ id: inv.id, kreisel_ref: k.kreisel_ref || `FSE-${k.invoice_no}`, status: 'waiting' });
+      const ref = await sysmod.quickKreiselRef(inv.file);
+      if (ref) {
+        queue.update({ id: inv.id, kreisel_ref: ref, status: 'waiting' });
+      } else {
+        // Scanned PDF or unusual format — must use LLM to find the ref
+        const k = await sysmod.parseKreiselWithLlm(inv.file) as { kreisel_ref?: string; invoice_no: string };
+        queue.update({ id: inv.id, kreisel_ref: k.kreisel_ref || `FSE-${k.invoice_no}`, status: 'waiting' });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       queue.update({ id: inv.id, status: 'failed', error: `Discovery: ${msg}` });
