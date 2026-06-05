@@ -48,6 +48,7 @@ const queue = new InvoiceQueue();
 // Window/Help bar, no "Toggle DevTools" shortcut). In dev: keep it.
 if (!IS_DEV) Menu.setApplicationMenu(null);
 const pendingUnknownSku = new Map<string, (resp: { skip: boolean; mappings?: Record<string, string> }) => void>();
+const pendingConfirmTransport = new Map<string, (resp: { transport: string; hmrcMonth?: string; halt?: boolean }) => void>();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -163,6 +164,18 @@ ipcMain.handle('queue:resolveTransport', (_, id: string, transport: string) => {
 });
 
 ipcMain.handle('queue:confirmTransport', (_, id: string, opts: { transport: string; hmrcMonth?: string; halt?: boolean }) => {
+  // Active pipeline case: resolve the awaited Promise so the pipeline resumes
+  // INLINE (no need for the user to click "Wyślij wszystkie" again). The
+  // pipeline applies the user's decision and continues to the next invoice.
+  const active = pendingConfirmTransport.get(id);
+  if (active) {
+    pendingConfirmTransport.delete(id);
+    active(opts);
+    return queue.state();
+  }
+  // Post-halt case (app restarted between pipeline run and modal submit, or
+  // user is resolving an item that was previously left in the modal queue):
+  // mutate the queue entry and rely on the next processAll to re-run it.
   queue.confirmTransport(id, opts);
   return queue.state();
 });
@@ -256,12 +269,22 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
         pendingUnknownSku.set(fileId, resolve);
         mainWindow?.webContents.send('modal:unknownSku', { fileId, unmapped });
       }),
+      onConfirmTransport: ({ fileId }) => new Promise(resolve => {
+        pendingConfirmTransport.set(fileId, resolve);
+        // The renderer's auto-open effect picks the invoice up from the
+        // queue:state event triggered by the status='awaiting_transport_confirm'
+        // update emitted just before this promise was created.
+      }),
     }, {
       manualHmrcMonth: inv.manual_hmrc_month,
       manualContainer: inv.manual_container,
     });
     const inAfter = queue.state().queue.find(q => q.id === inv.id) || queue.state().pending.find(p => p.id === inv.id);
-    if (inAfter && ['failed', 'ambiguous', 'unknown_sku', 'missing_transport', 'awaiting_transport_confirm'].includes(inAfter.status)) {
+    if (inAfter && ['failed', 'ambiguous', 'unknown_sku', 'missing_transport'].includes(inAfter.status)) {
+      // Note: awaiting_transport_confirm is NOT in this list — the pipeline
+      // awaits the user's response inline and resumes, so by the time we
+      // reach this check the invoice has either advanced (status=done/ambiguous)
+      // or halted (status=failed via decision.halt).
       halted = true;
       haltedAt = inv.kreisel_ref;
       console.warn(`Halted at ${inv.kreisel_ref} (status=${inAfter.status}); remaining ${sorted.length - processed - 1} held.`);

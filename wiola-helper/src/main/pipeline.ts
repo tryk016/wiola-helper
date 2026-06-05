@@ -14,6 +14,26 @@ import type { InvoiceState } from './queue';
 interface PipelineEvents {
   onProgress: (patch: Partial<InvoiceState>) => void;
   onUnknownSku: (ctx: { fileId: string; unmapped: unknown[] }) => Promise<{ skip: boolean; mappings?: Record<string, string> }>;
+  /** Interactive pause when PDF has no container. The renderer shows
+   *  ConfirmTransportModal with the suggested MySQL data; the pipeline
+   *  awaits the user's choice and continues with the response inline.
+   *  Returning halt=true treats the invoice as failed and the batch
+   *  halts (existing halt invariant). */
+  onConfirmTransport: (ctx: {
+    fileId: string;
+    kreiselRef: string;
+    suggested: {
+      found: boolean;
+      pod_id?: number;
+      branch_id?: number;
+      truck_reg_number?: string | null;
+      is_placeholder?: boolean;
+      is_container?: boolean;
+      delivered?: boolean;
+      delivery_date?: string | null;
+      invoice_date?: string | null;
+    };
+  }) => Promise<{ transport: string; hmrcMonth?: string; halt?: boolean }>;
 }
 
 interface PipelineOptions {
@@ -116,29 +136,48 @@ export async function runPipeline(
 
     // 1.5. TRANSPORT CONFIRM GATE — if PDF lacks a container number AND the
     // user hasn't already confirmed/overridden transport, pre-fetch the
-    // suggested value from MySQL (truck_reg_number in purchase_orders_deliveries)
-    // and pause for user confirmation. The user can accept the suggestion,
-    // type a different number, optionally pick an HMRC month right there,
-    // or halt the whole batch.
+    // suggested value from MySQL and AWAIT the user's decision inline.
+    // Unlike the previous halt-then-resume flow, this keeps the active
+    // batch running: pipeline resumes with the user's answer instead of
+    // returning, so processAll continues to the next invoice without
+    // requiring another "Wyślij wszystkie" click.
+    const kreiselRef = k.kreisel_ref || `FSE-${k.invoice_no}`;
     if (!k.container && options.manualContainer === undefined) {
-      let suggested;
+      let suggested: Awaited<ReturnType<typeof lookupPodTransport>>;
       try {
-        suggested = await lookupPodTransport(k.kreisel_ref || `FSE-${k.invoice_no}`);
+        suggested = await lookupPodTransport(kreiselRef);
       } catch (e) {
         suggested = { found: false };
         console.warn('[pipeline] lookupPodTransport failed:', (e as Error).message);
       }
+      // Surface the suggestion + transient status so the renderer can open
+      // the confirm-transport modal. The user's response comes back via
+      // the onConfirmTransport Promise; pipeline blocks here meanwhile.
       ev.onProgress({
         id: fileId,
         status: 'awaiting_transport_confirm',
         suggested_transport: suggested,
       });
-      return;
-    }
-
-    // If user provided a container override, surface it on the parsed object so
-    // the resolver picks it up.
-    if (options.manualContainer) {
+      const decision = await ev.onConfirmTransport({ fileId, kreiselRef, suggested });
+      if (decision.halt) {
+        ev.onProgress({
+          id: fileId,
+          status: 'failed',
+          error: 'Zatrzymane przez użytkownika podczas potwierdzania transportu',
+        });
+        return;
+      }
+      // Apply the user's decision to the in-flight pipeline state and resume.
+      if (decision.transport) k.container = decision.transport;
+      if (decision.hmrcMonth) options = { ...options, manualHmrcMonth: decision.hmrcMonth };
+      // Move back to processing visually now that the gate cleared.
+      ev.onProgress({
+        id: fileId,
+        status: 'processing',
+        container: k.container ?? undefined,
+      });
+    } else if (options.manualContainer) {
+      // Pre-supplied container override (e.g. retry of a previously halted item)
       k.container = options.manualContainer;
     }
 
