@@ -1,4 +1,4 @@
-# ===========================================================================
+﻿# ===========================================================================
 # Wiola Helper — installer for fresh Windows PC (production)
 #
 # What this does (no admin needed):
@@ -131,7 +131,7 @@ Push-Location "$ROOT\wiola-helper"
 $buildOut = & "$nodeDir\npm.cmd" run build:vite 2>&1
 if (-not (Test-Path "$ROOT\wiola-helper\dist\index.html")) {
     Write-Host ($buildOut -join "`n")
-    Fail "Build sie nie powiodl — brak dist\index.html"
+    Fail "Build sie nie powiodl - brak dist\index.html"
 }
 Pop-Location
 Ok "Aplikacja zbudowana (dist\ + dist-electron\)"
@@ -148,7 +148,7 @@ if ($removable) { $dlg.InitialDirectory = $removable.DeviceID + '\' }
 $dlg.RestoreDirectory = $true
 
 if ($dlg.ShowDialog() -ne 'OK') {
-    Warn "Nie wybrano pliku — .env trzeba bedzie skonfigurowac recznie pozniej."
+    Warn "Nie wybrano pliku - .env trzeba bedzie skonfigurowac recznie pozniej."
     Warn "Otwarcie Wioli > Ustawienia > wpisz tokeny QBO i ANTHROPIC_API_KEY."
 } else {
     $src = $dlg.FileName
@@ -164,30 +164,60 @@ foreach ($d in 'inbox','gotowe','bledy','wstrzymane') {
 }
 Ok "inbox, gotowe, bledy, wstrzymane"
 
-# --- 9. desktop shortcut + launcher --------------------------------------
-Step 9 9 "Tworzenie skrotu na pulpicie"
+# --- 9. desktop shortcut + start menu shortcut ---------------------------
+Step 9 9 "Tworzenie skrotow (pulpit + Menu Start)"
 
-# Launcher CMD
+$electronExe = "$ROOT\wiola-helper\node_modules\electron\dist\electron.exe"
+if (-not (Test-Path $electronExe)) {
+    Fail "Brak $electronExe - npm install w wiola-helper\ sie nie powiodl"
+}
+
+# Use .ico if present in repo, else fall back to electron.exe icon
+$iconPath = "$ROOT\wiola-helper\build\icon.ico"
+if (-not (Test-Path $iconPath)) { $iconPath = "${electronExe},0" }
+
+# Backup launcher CMD (jesli ktos chce uruchomic z konsoli z logami)
 $launcher = "$ROOT\Wiola Helper.cmd"
-@"
-@echo off
-title Wiola Helper
-cd /d "$ROOT\wiola-helper"
-"$ROOT\nodejs\node.exe" "node_modules\.bin\electron.cmd" .
-"@ | Set-Content -Encoding ASCII -Path $launcher
+$launcherTxt = "@echo off`r`ntitle Wiola Helper`r`ncd /d `"$ROOT\wiola-helper`"`r`n`"$electronExe`" ."
+Set-Content -Encoding ASCII -Path $launcher -Value $launcherTxt
 
-# Desktop shortcut
-$desktop = [Environment]::GetFolderPath('Desktop')
-$shortcut = Join-Path $desktop 'Wiola Helper.lnk'
-$ws = New-Object -ComObject WScript.Shell
-$sc = $ws.CreateShortcut($shortcut)
-$sc.TargetPath       = $launcher
-$sc.WorkingDirectory = $ROOT
-$sc.IconLocation     = "$ROOT\nodejs\node.exe,0"  # fallback icon
-$sc.WindowStyle      = 7   # minimized console
-$sc.Description      = 'Wiola Helper — automatyzacja faktur Kreisel'
-$sc.Save()
-Ok "Skrot: $shortcut"
+# Funkcja tworzaca skrot
+function New-Shortcut($targetPath, $shortcutPath, $arg1, $workDir, $icon, $desc) {
+    $dir = Split-Path $shortcutPath -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $ws = New-Object -ComObject WScript.Shell
+    $sc = $ws.CreateShortcut($shortcutPath)
+    $sc.TargetPath       = $targetPath
+    $sc.Arguments        = $arg1
+    $sc.WorkingDirectory = $workDir
+    $sc.IconLocation     = $icon
+    $sc.WindowStyle      = 1
+    $sc.Description      = $desc
+    $sc.Save()
+}
+
+$shortcutDesc = 'Wiola Helper - automatyzacja faktur Kreisel'
+
+# 1) Pulpit
+$desktop      = [Environment]::GetFolderPath('Desktop')
+$desktopLnk   = Join-Path $desktop 'Wiola Helper.lnk'
+New-Shortcut $electronExe $desktopLnk '.' "$ROOT\wiola-helper" $iconPath $shortcutDesc
+Ok "Pulpit:    $desktopLnk"
+
+# 2) Menu Start (Wszystkie aplikacje)
+$startMenu    = [Environment]::GetFolderPath('Programs')
+$startMenuLnk = Join-Path $startMenu 'Wiola Helper.lnk'
+New-Shortcut $electronExe $startMenuLnk '.' "$ROOT\wiola-helper" $iconPath $shortcutDesc
+Ok "Menu Start: $startMenuLnk"
+
+# 3) Pinujemy do paska zadan (best-effort - Windows 10/11 blokuje to czesto)
+try {
+    $shell = New-Object -ComObject Shell.Application
+    $folder = $shell.Namespace((Split-Path $desktopLnk -Parent))
+    $item = $folder.ParseName((Split-Path $desktopLnk -Leaf))
+    $verb = $item.Verbs() | Where-Object { $_.Name -match 'pasek zadan|taskbar' } | Select-Object -First 1
+    if ($verb) { $verb.DoIt() }
+} catch { }
 
 # --- summary -------------------------------------------------------------
 Write-Host ""
