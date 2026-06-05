@@ -15,6 +15,15 @@ const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const { suggest, loadProducts } = require('./sku_mapping');
 
+// pdf-parse v2 exports a class — instantiate with {data: buffer}, then .getText()
+let _PDFParseClass;
+async function extractPdfText(pdfBytes) {
+  if (!_PDFParseClass) _PDFParseClass = require('pdf-parse').PDFParse;
+  const p = new _PDFParseClass({ data: pdfBytes });
+  const result = await p.getText();
+  return (result && result.text) || '';
+}
+
 const MODEL = 'claude-sonnet-4-5-20250929'; // default — accurate, ~$3/M input + $15/M output
 
 // Read API key directly from .env (dotenv has issues with $ chars in MYSQL_PASSWORD)
@@ -176,15 +185,60 @@ const PARSER_TOOL = {
   },
 };
 
+/**
+ * Detect whether a PDF has a usable text layer (i.e. is a real PDF from Kreisel,
+ * not a scanned image). Returns the extracted text if usable, otherwise null.
+ *
+ * Criteria for "usable":
+ *   • At least 200 characters of meaningful text
+ *   • Contains "Faktura eksportowa" (case-insensitive) — Kreisel's standard header
+ *
+ * For scanned PDFs (image-only), pdf-parse returns either empty or a few stray
+ * characters from form widgets, so the check naturally falls back to vision.
+ */
+async function detectPdfTextLayer(pdfBytes) {
+  try {
+    const text = await extractPdfText(pdfBytes);
+    if (text.trim().length < 200) return null;
+    if (!/Faktura\s+eksportowa/i.test(text)) return null;
+    return text;
+  } catch (e) {
+    // pdf-parse occasionally throws on malformed PDFs — fall back to vision
+    console.warn('[parse_kreisel_llm] pdf-parse failed:', e.message);
+    return null;
+  }
+}
+
 async function parseKreiselWithLlm(pdfPath) {
   const client = _client();
   const pdfBytes = fs.readFileSync(pdfPath);
-  const pdfBase64 = pdfBytes.toString('base64');
+
+  // FAST PATH — text-based PDF: send extracted text only.
+  // Anthropic input tokens for text are ~5x cheaper than PDF document tokens,
+  // and there's no vision processing overhead. ~3s vs ~38s observed.
+  const extractedText = await detectPdfTextLayer(pdfBytes);
+
+  let userContent;
+  let parserMode;
+  if (extractedText) {
+    parserMode = 'text';
+    userContent = [
+      {
+        type: 'text',
+        text: 'Poniżej raw text wyciągnięty z PDF faktury Kreisla. Wyciągnij dane strukturalnie. Użyj narzędzia submit_kreisel_invoice.\n\n--- TEKST FAKTURY ---\n' + extractedText,
+      },
+    ];
+  } else {
+    parserMode = 'vision';
+    const pdfBase64 = pdfBytes.toString('base64');
+    userContent = [
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
+      { type: 'text', text: 'Wyciągnij dane z tej faktury Kreisla. Użyj narzędzia submit_kreisel_invoice.' },
+    ];
+  }
 
   const t0 = Date.now();
   // Hard 2-minute timeout — beyond this the request is almost certainly hung.
-  // Without this, axios under the hood waits indefinitely on a stalled socket
-  // and the GUI shows "parsing..." forever.
   const LLM_TIMEOUT_MS = 120_000;
   const response = await client.messages.create({
     model: MODEL,
@@ -203,13 +257,7 @@ async function parseKreiselWithLlm(pdfPath) {
     ],
     tool_choice: { type: 'tool', name: 'submit_kreisel_invoice' },
     messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
-          { type: 'text', text: 'Wyciągnij dane z tej faktury Kreisla. Użyj narzędzia submit_kreisel_invoice.' },
-        ],
-      },
+      { role: 'user', content: userContent },
     ],
   }, {
     timeout: LLM_TIMEOUT_MS,
@@ -292,6 +340,7 @@ async function parseKreiselWithLlm(pdfPath) {
     warnings,
     _meta: {
       model: MODEL,
+      parser_mode: parserMode,   // 'text' (fast) or 'vision' (scanned PDF fallback)
       latency_ms: ms,
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
