@@ -80,8 +80,20 @@ WAŻNE REGUŁY:
 1. Faktura ma format "Faktura eksportowa VAT nr (S)FSE-XXX/YYYY/EXP". Wyciągnij invoice_no jako "XXX/YYYY/EXP".
 2. Pole "Kontener" zawiera numer kontenera (4 wielkie litery + 7 cyfr, np. CMAU6487821). Jeśli brak, container=null (to truck shipment).
 3. Daty w formacie YYYY/MM/DD.
-4. Każda linia produktowa ma: numer, opis, PKWiU, PCN, ilość, jednostka (SZT/KG), cena netto PLN, wartość netto PLN.
+4. Każda linia produktowa ma: numer kolejny, opis, PKWiU (np "20.30.12"), PCN/CN (np "32091000"), ilość, jednostka (SZT/KG), cena netto PLN, wartość netto PLN.
 5. Opisy MOGĄ łamać się na wiele linii — sklejaj je w jeden raw_desc.
+
+CO NIE JEST LINIĄ PRODUKTOWĄ (NIE wciągaj do lines[]):
+   • "Forma płatności" / "Termin płatności" / "Sposób zapłaty" — np. "Przelew-90 2026-08-20" to termin płatności (90 dni, due date)
+   • "Razem", "Suma", "Do zapłaty", "Razem do zapłaty", "Wartość netto", "VAT", "Wartość brutto" — to podsumowania na dole faktury
+   • "INCOTERMS", "EXW", "FCA", "CIF" — warunki dostawy
+   • Linie BEZ kodu PKWiU lub BEZ kodu PCN/CN — nie są pozycjami towarowymi
+   • Komentarze, notatki, "Kontener:", "Magazyn:", "Spedytor:", numery referencyjne
+   • Dane bankowe (IBAN, SWIFT, nazwa banku, numer konta)
+   • Adresy nadawcy/odbiorcy
+   • Stopka faktury (osoba wystawiająca, podpisy)
+
+Linia produktowa Kreisla ZAWSZE ma kod PKWiU i kod PCN. Jeśli ich brak — to NIE jest produkt, NIE wciągaj do lines[].
 
 MAPOWANIE SKU — Kreisel description → ewi_sku.
 Korzystaj z KNOWN_ITEM_NAMES jako jedynego źródła prawdy dla pola ewi_sku.
@@ -202,6 +214,27 @@ async function parseKreiselWithLlm(pdfPath) {
   const toolUse = response.content.find(b => b.type === 'tool_use');
   if (!toolUse) throw new Error('No tool_use in LLM response');
   const data = toolUse.input;
+
+  // Safety filter — drop non-product lines that slipped past the prompt.
+  // Real Kreisel product lines ALWAYS have PKWiU + PCN codes.
+  // Common false positives: payment terms (Przelew-90), totals (Razem do zapłaty), INCOTERMS.
+  const PAYMENT_KEYWORDS = /^(przelew|forma\s+p[lł]atno|termin\s+p[lł]atno|razem|suma|do\s+zap[lł]aty|warto[sś][cć]|netto|brutto|vat|incoterms|exw|fca|cif|kontener|magazyn|spedytor|iban|swift)/i;
+  const rejected = [];
+  if (Array.isArray(data.lines)) {
+    data.lines = data.lines.filter(l => {
+      const hasPkwiu = l.pkwiu && String(l.pkwiu).trim().length > 2;
+      const hasPcn   = l.pcn   && String(l.pcn).trim().length > 2;
+      const looksLikePayment = l.raw_desc && PAYMENT_KEYWORDS.test(String(l.raw_desc).trim());
+      if (!hasPkwiu || !hasPcn || looksLikePayment) {
+        rejected.push({ nr: l.nr, raw_desc: l.raw_desc, reason: looksLikePayment ? 'payment-term-or-summary' : 'no-pkwiu-or-pcn' });
+        return false;
+      }
+      return true;
+    });
+  }
+  if (rejected.length) {
+    console.error('[parse_kreisel_llm] Rejected non-product lines:', JSON.stringify(rejected));
+  }
 
   // Compute lines into our canonical shape (same as parse_kreisel_pl.js output)
   const lines = (data.lines || []).filter(l => l.ewi_sku !== null).map(l => ({
