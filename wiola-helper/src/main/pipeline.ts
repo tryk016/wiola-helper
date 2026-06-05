@@ -60,9 +60,12 @@ type ResolverResult = {
   source?: string;
   hmrc_month?: string;
   alternative_hmrc_month?: string;
+  hmrc_month_options?: string[];     // for truck-pending: empty array
+  pending_message?: string;          // human description of what's awaited
   predicted_ata_uk?: string;
   ata_uk?: string;
   container?: string;
+  reason?: string;
 };
 
 /**
@@ -109,22 +112,9 @@ export async function runPipeline(
       container: k.container ?? undefined,
     });
 
-    // 1.5. TRANSPORT CHECK — block if PDF has no container AND user hasn't
-    // supplied a manual override yet. options.manualContainer === undefined
-    // means "user hasn't been asked"; "" means "asked, said no info".
-    const effectiveContainer = options.manualContainer !== undefined
-      ? options.manualContainer
-      : (k.container || null);
-    if (!effectiveContainer && options.manualContainer === undefined) {
-      ev.onProgress({
-        id: fileId,
-        status: 'missing_transport',
-        error: 'Brak numeru kontenera lub auta na fakturze — wpisz dane transportu lub potwierdź "brak"',
-      });
-      return;
-    }
-    // If user provided a container override, surface it on the parsed object so
-    // the resolver picks it up (resolver reads kreiselRefOrParsed.container).
+    // If user provided a container override (rare — used when PDF parser missed
+    // a container number that the operator knows), surface it on the parsed
+    // object so the resolver picks it up.
     if (options.manualContainer) {
       k.container = options.manualContainer;
     }
@@ -144,15 +134,18 @@ export async function runPipeline(
       const resolved = (await resolveImport(k)) as ResolverResult;
 
       if (resolved.status === 'ambiguous_month') {
+        // Build options list: explicit (truck-pending → []) or container-based (1-2 months).
+        const opts = resolved.hmrc_month_options !== undefined
+          ? resolved.hmrc_month_options
+          : [resolved.hmrc_month, resolved.alternative_hmrc_month].filter(Boolean) as string[];
         ev.onProgress({
           id: fileId,
           status: 'ambiguous',
-          hmrc_month_options: [
-            resolved.hmrc_month,
-            resolved.alternative_hmrc_month,
-          ].filter(Boolean) as string[],
+          hmrc_month_options: opts,
           predicted_ata_uk: resolved.predicted_ata_uk,
           days_waiting: 0,
+          pending_message: resolved.pending_message,
+          resolver_source: resolved.source,
         });
         return;
       }

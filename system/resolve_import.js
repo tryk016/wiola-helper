@@ -83,7 +83,11 @@ async function getPodRow(kreiselInvoiceRef) {
   if (!mysqlAvailable()) return [];
   const ref = kreiselInvoiceRef.replace(/^FSE-/i, '');
   const [nr, year] = ref.split('/');
-  const like = `FSE-${nr}/${year}/%`;
+  // Kreisel invoice numbers in MySQL `purchase_orders_deliveries.invoice_number_supplier`
+  // are entered either WITH prefix ("FSE-139/2026/EXP") or WITHOUT ("139/2026/EXP"),
+  // depending on which operator typed them. Match both via OR.
+  const likeWithFse = `FSE-${nr}/${year}/%`;
+  const likeNoFse   = `${nr}/${year}/%`;
   const conn = await getMysql().createConnection({
     host: process.env.MYSQL_HOST || '10.1.20.15',
     port: parseInt(process.env.MYSQL_PORT || '3306', 10),
@@ -98,9 +102,10 @@ async function getPodRow(kreiselInvoiceRef) {
               FROM_UNIXTIME(invoice_date) AS inv_dt,
               FROM_UNIXTIME(delivery_date) AS deliv_dt
          FROM purchase_orders_deliveries
-        WHERE supplier_id=? AND invoice_number_supplier LIKE ?
+        WHERE supplier_id=?
+          AND (invoice_number_supplier LIKE ? OR invoice_number_supplier LIKE ?)
         ORDER BY invoice_date DESC`,
-      [SUPPLIER_ID_EWIPRO, like]
+      [SUPPLIER_ID_EWIPRO, likeWithFse, likeNoFse]
     );
     return rows;
   } finally {
@@ -154,8 +159,18 @@ async function resolveImport(kreiselRefOrParsed) {
       // Container not in Magemar → predict via invoice_date + 13d (with month-boundary buffer)
       return predictFromInvoiceDate(base, pdfIssueDate, 12, pdfContainer, mag);
     }
-    // No container in PDF → truck shipment, no MySQL → predict +3d (truck transit)
-    return predictFromInvoiceDate(base, pdfIssueDate, 3, null, null);
+    // No container in PDF AND no MySQL row → truck shipment, can't predict.
+    // For trucks we ALWAYS need MySQL delivery_date (hard data, not heuristic).
+    // Hold the invoice until the warehouse registers the PO.
+    return {
+      ...base,
+      status: 'ambiguous_month',
+      confidence: 'predicted',
+      source: 'no_mysql_no_container',
+      hmrc_month_options: [],
+      pending_message: 'Truck — brak wpisu w MySQL dla tego numeru faktury. Sprawdź czy magazyn zarejestrował przyjęcie towaru, lub czy numer faktury w MySQL jest zgodny (z lub bez prefiksu FSE-).',
+      reason: 'no_mysql_pod',
+    };
   }
 
   // === BRANCH B: MySQL data available (original logic) ===
@@ -264,16 +279,17 @@ async function resolveImport(kreiselRefOrParsed) {
       notes: 'Truck shipment — month(delivery_date), day≤3 → prev month.',
     };
   }
-  // Truck not yet delivered → assume +3 days from Kreisel invoice (typical PL→UK truck transit)
-  const eta = new Date(r.invoice_date * 1000 + 3 * 86400 * 1000);
-  const month = `${eta.getUTCFullYear()}-${pad2(eta.getUTCMonth() + 1)}`;
+  // Truck not yet delivered — DO NOT predict +3d. For trucks the HMRC month
+  // must come from MySQL delivery_date (hard data), not heuristic. Hold the
+  // invoice until the warehouse marks it as delivered.
   return {
     ...base,
-    status: 'ok',
+    status: 'ambiguous_month',
     confidence: 'predicted',
-    source: 'invoice_plus_3d',
-    hmrc_month: month,
-    predicted_arrival: `${eta.getUTCFullYear()}-${pad2(eta.getUTCMonth() + 1)}-${pad2(eta.getUTCDate())}`,
+    source: 'mysql_pending_delivery',
+    hmrc_month: undefined,
+    hmrc_month_options: [],
+    pending_message: `Truck ${truckReg || '(brak rej.)'} — nie ma jeszcze daty dostawy w MySQL (POD #${r.id}). Czeka aż truck dotrze do magazynu i ktoś go zaewidencjonuje.`,
     reason: 'truck_pending_delivery',
     truck_reg: truckReg,
   };

@@ -42,6 +42,7 @@ export interface Invoice {
   container?: string;
   error?: string;
   delay_until?: number;  // unix ms — when the anti-automation delay ends
+  pending_message?: string;
 }
 
 export interface Health {

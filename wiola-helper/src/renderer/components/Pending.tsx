@@ -38,11 +38,15 @@ export function Pending({ invoices, onSelect }: Props) {
                     </span>
                   )}
                 </div>
-                {inv.hmrc_month_options && (
+                {inv.hmrc_month_options && inv.hmrc_month_options.length > 0 ? (
                   <div className="text-xs text-slate-400 mt-0.5">
                     Możliwe HMRC: <span className="font-mono text-amber-300">{inv.hmrc_month_options.join(' lub ')}</span>
                   </div>
-                )}
+                ) : inv.pending_message ? (
+                  <div className="text-xs text-amber-200 mt-1 leading-snug">
+                    {inv.pending_message}
+                  </div>
+                ) : null}
               </div>
             </div>
           </button>

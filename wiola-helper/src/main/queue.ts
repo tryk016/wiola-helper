@@ -63,6 +63,9 @@ export interface InvoiceState {
   // lookup) or a truck registration (anything else → +3d prediction).
   // Empty string "" means "no transport info, accept the +3d truck prediction".
   manual_container?: string;
+  // Set when resolver puts the invoice in ambiguous state — explains WHY
+  // it's pending so the UI doesn't just say "granica miesiąca" for truck cases.
+  pending_message?: string;
 }
 
 const STATE_DIR = path.join(app.getPath('userData'), 'state');
