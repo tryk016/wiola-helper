@@ -282,6 +282,14 @@ async function resolveImport(kreiselRefOrParsed) {
   // Truck not yet delivered — DO NOT predict +3d. For trucks the HMRC month
   // must come from MySQL delivery_date (hard data), not heuristic. Hold the
   // invoice until the warehouse marks it as delivered.
+  // Detect placeholder truck_reg (warehouse sometimes pastes the invoice
+  // number into the field before the real registration is known).
+  const placeholderReg = !!truckReg && (/^\d+\/\d{4}\/EXP$/i.test(truckReg) || /^FSE/i.test(truckReg));
+  const regNote = !truckReg
+    ? '(brak nr. auta)'
+    : placeholderReg
+      ? `placeholder "${truckReg}" (magazyn nie wpisał jeszcze prawdziwego nr. auta)`
+      : truckReg;
   return {
     ...base,
     status: 'ambiguous_month',
@@ -289,7 +297,7 @@ async function resolveImport(kreiselRefOrParsed) {
     source: 'mysql_pending_delivery',
     hmrc_month: undefined,
     hmrc_month_options: [],
-    pending_message: `Truck ${truckReg || '(brak rej.)'} — nie ma jeszcze daty dostawy w MySQL (POD #${r.id}). Czeka aż truck dotrze do magazynu i ktoś go zaewidencjonuje.`,
+    pending_message: `POD #${r.id} jest w MySQL — nr auta: ${regNote}. Brak daty dostawy (delivered=${r.delivered ?? 0}). Truck jeszcze nie został oznaczony jako dostarczony. Poczekaj aż magazyn zaewidencjonuje dostawę, albo wpisz miesiąc HMRC ręcznie poniżej.`,
     reason: 'truck_pending_delivery',
     truck_reg: truckReg,
   };
