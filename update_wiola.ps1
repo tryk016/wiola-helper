@@ -185,6 +185,39 @@ if ((Test-Path "$bakDir\magemar.xlsx") -and (-not (Test-Path "$ROOT\magemar.xlsx
 Remove-Item $repoZip -Force -ErrorAction SilentlyContinue
 Remove-Item $tmpExtract -Recurse -Force -ErrorAction SilentlyContinue
 
+# --- Rebuild shortcuts (fixes old shortcuts pointing to .cmd which opened a console window) ---
+Write-Host ""
+Write-Host "[+] Odbudowuje skroty (pulpit + Menu Start)" -ForegroundColor Cyan
+$electronExe = "$ROOT\wiola-helper\node_modules\electron\dist\electron.exe"
+if (Test-Path $electronExe) {
+    $iconPath = "$ROOT\wiola-helper\build\icon.ico"
+    if (-not (Test-Path $iconPath)) { $iconPath = "${electronExe},0" }
+
+    $desktop      = [Environment]::GetFolderPath('Desktop')
+    $startMenu    = [Environment]::GetFolderPath('Programs')
+    $shortcutDesc = 'Wiola Helper - automatyzacja faktur Kreisel'
+
+    foreach ($lnkPath in @((Join-Path $desktop 'Wiola Helper.lnk'),
+                           (Join-Path $startMenu 'Wiola Helper.lnk'))) {
+        # Delete old shortcut first to force WSH to fully rewrite (avoids stale TargetPath)
+        if (Test-Path $lnkPath) { Remove-Item $lnkPath -Force -ErrorAction SilentlyContinue }
+        $dir = Split-Path $lnkPath -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $ws = New-Object -ComObject WScript.Shell
+        $sc = $ws.CreateShortcut($lnkPath)
+        $sc.TargetPath       = $electronExe
+        $sc.Arguments        = '.'
+        $sc.WorkingDirectory = "$ROOT\wiola-helper"
+        $sc.IconLocation     = $iconPath
+        $sc.WindowStyle      = 1
+        $sc.Description      = $shortcutDesc
+        $sc.Save()
+        Ok "Skrot: $lnkPath"
+    }
+} else {
+    Warn "Brak $electronExe - skroty nie zostaly odbudowane"
+}
+
 Write-Host ""
 Write-Host "===========================================================" -ForegroundColor Green
 Write-Host "   AKTUALIZACJA ZAKONCZONA" -ForegroundColor Green
