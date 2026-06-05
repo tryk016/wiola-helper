@@ -1,0 +1,203 @@
+import { useEffect } from 'react';
+import { DropZone } from './components/DropZone';
+import { Queue } from './components/Queue';
+import { Pending } from './components/Pending';
+import { StatusBar } from './components/StatusBar';
+import { Sidebar } from './components/Sidebar';
+import { UnknownSkuModal } from './components/UnknownSkuModal';
+import { PendingResolvedModal } from './components/PendingResolvedModal';
+import { DuplicatesModal } from './components/DuplicatesModal';
+import { HistoryView } from './components/HistoryView';
+import { SettingsView } from './components/SettingsView';
+import { LogView } from './components/LogView';
+import { useStore, type ResolvedPending, type UnmappedLine, type DuplicateItem } from './store';
+import type { Invoice, Health } from './types';
+
+export function App() {
+  const store = useStore();
+
+  useEffect(() => {
+    // Initial state
+    window.wiola.getQueue().then((s) => store.setState(s as { queue: Invoice[]; pending: Invoice[] }));
+    window.wiola.healthCheck().then((h) => store.setHealth(h as Health));
+
+    // Refresh health every 60s
+    const healthTimer = setInterval(() => {
+      window.wiola.healthCheck().then((h) => store.setHealth(h as Health));
+    }, 60_000);
+
+    // Subscribe to queue changes
+    const unsubQueue = window.wiola.on('queue:state', (...args) => {
+      const s = args[0] as { queue: Invoice[]; pending: Invoice[] };
+      store.setState(s);
+    });
+
+    // Unknown SKU modal trigger
+    const unsubUnknown = window.wiola.on('modal:unknownSku', (...args) => {
+      const data = args[0] as { fileId: string; unmapped: UnmappedLine[] };
+      store.openUnknownSku(data.fileId, data.unmapped);
+    });
+
+    // Pending resolved trigger
+    const unsubResolved = window.wiola.on('modal:pendingResolved', (...args) => {
+      const items = args[0] as ResolvedPending[];
+      store.openPendingResolved(items);
+    });
+
+    // Duplicate detection trigger
+    const unsubDups = window.wiola.on('modal:duplicates', (...args) => {
+      const items = args[0] as DuplicateItem[];
+      store.openDuplicates(items);
+    });
+
+    // Auto re-check pending on startup (give Magemar lookup a moment to settle)
+    setTimeout(() => {
+      window.wiola.pendingRecheck();
+    }, 2000);
+
+    return () => {
+      clearInterval(healthTimer);
+      unsubQueue?.();
+      unsubUnknown?.();
+      unsubResolved?.();
+      unsubDups?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleDrop = async (files: string[]) => {
+    await window.wiola.enqueue(files);
+  };
+
+  const handlePickFiles = async () => {
+    const files = await window.wiola.pickPdfs();
+    if (files?.length) await window.wiola.enqueue(files);
+  };
+
+  const handleProcessAll = async () => {
+    // POST to QBO sandbox (use false for dry-run)
+    await window.wiola.processAll(true);
+  };
+
+  const stats = {
+    waiting: store.queue.filter(q => q.status === 'waiting').length,
+    processing: store.queue.filter(q => ['parsing', 'processing'].includes(q.status)).length,
+    done: store.queue.filter(q => q.status === 'done').length,
+    failed: store.queue.filter(q => q.status === 'failed').length,
+  };
+
+  const selectedInvoice =
+    store.queue.find(q => q.id === store.selectedId) ||
+    store.pending.find(p => p.id === store.selectedId) ||
+    null;
+
+  return (
+    <div className="h-screen flex flex-col bg-slate-900 text-slate-100">
+      <header className="drag-region flex items-center justify-between px-6 py-3 border-b border-slate-700 bg-slate-950">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-ewi-green to-ewi-blue flex items-center justify-center font-bold text-white text-lg shadow-lg">W</div>
+          <div>
+            <h1 className="text-base font-semibold leading-tight">Wiola Helper</h1>
+            <p className="text-xs text-slate-400 leading-tight">Kreisel → EWI Pro → EWI Store</p>
+          </div>
+        </div>
+        <StatusBar health={store.health} />
+      </header>
+
+      <main className="flex-1 flex overflow-hidden">
+        <section className="w-1/2 min-w-[600px] flex flex-col border-r border-slate-700 overflow-y-auto">
+          <DropZone onDrop={handleDrop} onPickFiles={handlePickFiles} />
+          <Queue
+            invoices={store.queue}
+            stats={stats}
+            onProcessAll={handleProcessAll}
+            onSelect={(inv) => store.select(inv.id)}
+            onClearDone={async () => { await window.wiola.clearDone(); }}
+            onClearFailed={async () => { await window.wiola.clearFailed(); }}
+            onRemove={async (id) => { await window.wiola.remove(id); }}
+            selectedId={store.selectedId}
+          />
+          <Pending invoices={store.pending} onSelect={(inv) => store.select(inv.id)} />
+        </section>
+
+        <section className="flex-1 overflow-y-auto bg-slate-950">
+          <Sidebar invoice={selectedInvoice} />
+        </section>
+      </main>
+
+      <footer className="px-6 py-2 border-t border-slate-700 bg-slate-950 flex items-center justify-between text-xs text-slate-400">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => store.toggleHistoryView(true)}
+            className="hover:text-slate-200 transition-colors flex items-center gap-1.5"
+          >
+            📜 Historia
+            {store.history.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">
+                {store.history.length}
+              </span>
+            )}
+          </button>
+        </div>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => store.toggleLog(true)}
+            className="hover:text-slate-200 transition-colors flex items-center gap-1"
+          >
+            📜 Log
+          </button>
+          <button
+            onClick={() => store.toggleSettings(true)}
+            className="hover:text-slate-200 transition-colors flex items-center gap-1"
+          >
+            ⚙️ Ustawienia
+          </button>
+          <span className="font-mono">v0.1.0</span>
+        </div>
+      </footer>
+
+      {/* Modals */}
+      {store.unknownSkuModal && (
+        <UnknownSkuModal
+          fileId={store.unknownSkuModal.fileId}
+          unmapped={store.unknownSkuModal.unmapped}
+          onResolve={(resp) => window.wiola.respondToUnknownSku(store.unknownSkuModal!.fileId, resp)}
+          onClose={() => store.closeUnknownSku()}
+        />
+      )}
+      {store.pendingResolvedModal && (
+        <PendingResolvedModal
+          items={store.pendingResolvedModal}
+          onClose={() => store.closePendingResolved()}
+          onAcceptAll={async () => {
+            await window.wiola.processAll(true);
+          }}
+        />
+      )}
+      {store.duplicatesModal && (
+        <DuplicatesModal
+          duplicates={store.duplicatesModal}
+          onSkipAll={() => store.closeDuplicates()}
+          onForceAll={async () => {
+            const paths = store.duplicatesModal!.map(d => d.file);
+            await window.wiola.enqueueForce(paths);
+            store.closeDuplicates();
+          }}
+          onClose={() => store.closeDuplicates()}
+        />
+      )}
+      {store.historyViewOpen && (
+        <HistoryView
+          history={store.history}
+          onClose={() => store.toggleHistoryView(false)}
+        />
+      )}
+      {store.settingsOpen && (
+        <SettingsView onClose={() => store.toggleSettings(false)} />
+      )}
+      {store.logOpen && (
+        <LogView onClose={() => store.toggleLog(false)} />
+      )}
+    </div>
+  );
+}

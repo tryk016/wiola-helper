@@ -1,0 +1,25 @@
+{
+  "name": "kreisel",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "axios": "^1.17.0",
+    "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
+    "form-data": "^4.0.5",
+    "intuit-oauth": "^4.2.3",
+    "mysql2": "^3.22.4",
+    "node-quickbooks": "^2.0.50",
+    "pdf-parse": "^2.4.5",
+    "tesseract.js": "^7.0.0"
+  }
+}

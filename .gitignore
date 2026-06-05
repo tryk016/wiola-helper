@@ -1,0 +1,86 @@
+# ════════════════════════════════════════════════════════════════════
+#  CRITICAL — secrets, credentials, customer data — NEVER COMMIT
+# ════════════════════════════════════════════════════════════════════
+
+# Environment files (contain API keys, tokens, passwords)
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+
+# Local secrets backup
+.qbo_sandbox.env
+*.key
+*.pem
+*.cert
+*.p12
+*.pfx
+
+# ════════════════════════════════════════════════════════════════════
+#  Business data — invoices, customer info, internal product catalog
+# ════════════════════════════════════════════════════════════════════
+
+# Real Kreisel + EWI Pro invoice PDFs (fixtures used for testing)
+**/fixtures/
+**/historical_invoices/
+**/inbox/
+**/gotowe/
+**/bledy/
+**/wstrzymane/
+**/external/magemar.xlsx
+**/magemar.xlsx
+magemar.xlsx
+
+# Internal product catalogs (snapshots from EWI DB)
+ewi_pro_products.json
+ewi_pro_known_items.json
+
+# User state files (queue, pending, history with real customer data)
+state/
+**/queue.json
+**/pending.json
+**/history.json
+**/prefs.json
+
+# Logs (may contain customer references)
+log.txt
+log_archiwum_*.txt
+**/*.log
+
+# OCR cache (may contain rendered images of customer invoices)
+tesseract_cache/
+hmrc_cache/
+tmp/
+
+# ════════════════════════════════════════════════════════════════════
+#  Build artifacts & dependencies
+# ════════════════════════════════════════════════════════════════════
+
+node_modules/
+dist/
+dist-electron/
+release/
+portable/
+build/
+out/
+*.tsbuildinfo
+
+# ════════════════════════════════════════════════════════════════════
+#  Editor / OS
+# ════════════════════════════════════════════════════════════════════
+
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node version
+.nvmrc
+
+# Test outputs
+*.test.json
+coverage/

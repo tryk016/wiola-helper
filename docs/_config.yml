@@ -1,0 +1,7 @@
+title: Wiola Helper
+description: Internal accounting automation for EWI Store Ltd
+theme: jekyll-theme-minimal
+markdown: kramdown
+permalink: /:title.html
+exclude:
+  - README.md

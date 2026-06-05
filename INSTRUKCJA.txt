@@ -1,0 +1,95 @@
+═══════════════════════════════════════════════════════════════════════
+  AUTOMATYZACJA FAKTUR KREISEL → EWI PRO → EWI STORE
+═══════════════════════════════════════════════════════════════════════
+
+Wszystko jest w jednym folderze:  C:\kreisel\
+
+3 pliki .cmd — numerowane, klikaj w kolejności pierwszy raz:
+
+  1_INSTALACJA_pierwsze_uruchomienie.cmd
+     ← UŻYJ TYLKO RAZ przy pierwszym uruchomieniu na nowym komputerze.
+       Sprawdzi czy Node.js jest zainstalowany. Jeśli nie - sam pobierze
+       portable wersję do C:\kreisel\system\nodejs\ (bez admina, bez PATH).
+       Następnie zainstaluje zależności i przetestuje połączenie z QBO.
+       Trwa 3-5 min.
+
+  2_Sprawdz_bez_postowania.cmd
+     ← Każdego dnia PRZED postowaniem.
+       Pokaże co skrypt zrobiłby — bez wysyłania niczego do QBO.
+       Bezpieczne — używaj zawsze.
+
+  3_Procesuj_faktury.cmd
+     ← Realny posting do QBO + przeniesienie plików.
+       Używaj DOPIERO po dry-run i wizualnej weryfikacji.
+
+═══════════════════════════════════════════════════════════════════════
+  CODZIENNY WORKFLOW — 5 KROKÓW
+═══════════════════════════════════════════════════════════════════════
+
+  KROK 1 (rano): zaktualizuj plik Magemar
+     - Otwórz w przeglądarce link z maila (SharePoint, CMA CGM)
+     - File → Save As → Download a copy
+     - Zapisz do:  C:\kreisel\magemar.xlsx
+       (NADPISZ stary plik)
+
+  KROK 2: wrzuć wszystkie nowe PDFy faktur Kreisla do:
+     C:\kreisel\inbox\
+
+  KROK 3: dwuklik 2_Sprawdz_bez_postowania.cmd
+     - Przejrzy każdy PDF, pokaże co byłoby wystawione
+     - Zobacz czy są błędy / ostrzeżenia
+     - Nic się nie wyśle do QBO
+
+  KROK 4: jeśli wszystko OK → dwuklik 3_Procesuj_faktury.cmd
+     - Realny posting do QBO
+     - PDFy automatycznie przenoszone:
+        ✓ sukces       → C:\kreisel\gotowe\YYYY-MM-DD\
+        ✗ błąd          → C:\kreisel\bledy\YYYY-MM-DD\ + plik _BLAD.txt
+        ⏸ niejednoznaczne (granica miesiąca) → C:\kreisel\wstrzymane\
+
+  KROK 5: sprawdź wizualnie pierwsze 1-2 dokumenty w QBO
+
+═══════════════════════════════════════════════════════════════════════
+  STRUKTURA FOLDERU:
+═══════════════════════════════════════════════════════════════════════
+
+  C:\kreisel\
+  ├── (3 pliki .cmd + INSTRUKCJA.txt + magemar.xlsx)
+  ├── inbox\          ← TU WRZUCASZ NOWE PDFy
+  ├── gotowe\         ← sukces - zaksięgowane w QBO
+  ├── bledy\          ← błąd - daj znać Patrykowi co napisał skrypt
+  ├── wstrzymane\     ← niepewny miesiąc HMRC (kontener na granicy
+  │                     miesiąca) - czekaj na aktualizację Magemar,
+  │                     potem wrzuć ponownie do inbox\
+  ├── log.txt         ← historia wszystkich uruchomień
+  └── system\         ← cały kod, Node.js portable, node_modules
+                        - NIE DOTYKAĆ, instalator to konfiguruje
+
+═══════════════════════════════════════════════════════════════════════
+  CO ROBIĆ JAK COŚ NIE DZIAŁA:
+═══════════════════════════════════════════════════════════════════════
+
+  „NIEZNANE PRODUKTY na fakturze"
+     → w fakturze jest nowy produkt którego skrypt nie zna.
+       PDF trafi do bledy\ z plikiem _BLAD.txt zawierającym
+       sugerowane dopasowania z systemu.
+       Daj znać Patrykowi - doda 1 linijkę w 5 minut.
+
+  „MONTH BOUNDARY" / „wstrzymane"
+     → kontener może dotrzeć na przełomie miesięcy.
+       PDF trafi do wstrzymane\.
+       AKCJA: poczekaj 1-2 dni, zaktualizuj Magemar.xlsx,
+       wyciągnij PDF z wstrzymane\ i wrzuć ponownie do inbox\.
+
+  „Magemar Excel not found"
+     → zapomniałaś pobrać dziś plik z SharePoint. Krok 1 instrukcji.
+
+  „401 Unauthorized" w QBO
+     → tokeny wygasły (po ~100 dniach). Patryk odnowi.
+
+  Skrypt się zacina lub coś dziwnego się dzieje
+     → zrób screenshot ekranu, wyślij Patrykowi.
+
+═══════════════════════════════════════════════════════════════════════
+  KONTAKT:  Patryk Baran  -  patrick.baran@ewistore.co.uk
+═══════════════════════════════════════════════════════════════════════
