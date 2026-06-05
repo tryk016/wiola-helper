@@ -12,10 +12,7 @@ interface EnvData {
   QBO_EWISTORE_REALM_ID?: string;
   QBO_EWIPRO_REFRESH_TOKEN?: string;
   QBO_EWISTORE_REFRESH_TOKEN?: string;
-  ANTHROPIC_API_KEY?: string;
-  MYSQL_HOST?: string;
-  MYSQL_USER?: string;
-  MYSQL_PASSWORD?: string;
+  // Anthropic + MySQL — konfigurowane przez administratora bezpośrednio w .env
 }
 
 interface Prefs {
@@ -162,17 +159,9 @@ export function SettingsView({ onClose }: Props) {
           <Field label="EWI Store Refresh Token" value={dirty.QBO_EWISTORE_REFRESH_TOKEN ?? env.QBO_EWISTORE_REFRESH_TOKEN} onChange={v => setField('QBO_EWISTORE_REFRESH_TOKEN', v)} mono secret />
         </Section>
 
-        {/* Anthropic */}
-        <Section title="🧠 Anthropic API (LLM parser)" subtitle="Klucz do API Claude (parsowanie faktur)">
-          <Field label="ANTHROPIC_API_KEY" value={dirty.ANTHROPIC_API_KEY ?? env.ANTHROPIC_API_KEY} onChange={v => setField('ANTHROPIC_API_KEY', v)} mono secret />
-        </Section>
-
-        {/* MySQL */}
-        <Section title="🗄 MySQL (dist) — opcjonalne dla truck shipments">
-          <Field label="MYSQL_HOST" value={dirty.MYSQL_HOST ?? env.MYSQL_HOST} onChange={v => setField('MYSQL_HOST', v)} mono />
-          <Field label="MYSQL_USER" value={dirty.MYSQL_USER ?? env.MYSQL_USER} onChange={v => setField('MYSQL_USER', v)} mono />
-          <Field label="MYSQL_PASSWORD" value={dirty.MYSQL_PASSWORD ?? env.MYSQL_PASSWORD} onChange={v => setField('MYSQL_PASSWORD', v)} mono secret />
-        </Section>
+        {/* Sekcje Anthropic API + MySQL ukryte przed użytkownikiem końcowym.
+            Te credentials konfiguruje administrator (Patryk) przez plik
+            C:\kreisel\system\.env. Nie powinny być modyfikowane z aplikacji. */}
 
         {/* App preferences */}
         <Section title="⚙️ Preferencje aplikacji">
