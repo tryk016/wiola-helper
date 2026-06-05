@@ -4,6 +4,7 @@
 import {
   parseKreiselWithLlm,
   resolveImport,
+  lookupPodTransport,
   getRate,
   qboClient,
   qboPayloads,
@@ -113,9 +114,30 @@ export async function runPipeline(
       issue_date: k.issue_date,
     });
 
-    // If user provided a container override (rare — used when PDF parser missed
-    // a container number that the operator knows), surface it on the parsed
-    // object so the resolver picks it up.
+    // 1.5. TRANSPORT CONFIRM GATE — if PDF lacks a container number AND the
+    // user hasn't already confirmed/overridden transport, pre-fetch the
+    // suggested value from MySQL (truck_reg_number in purchase_orders_deliveries)
+    // and pause for user confirmation. The user can accept the suggestion,
+    // type a different number, optionally pick an HMRC month right there,
+    // or halt the whole batch.
+    if (!k.container && options.manualContainer === undefined) {
+      let suggested;
+      try {
+        suggested = await lookupPodTransport(k.kreisel_ref || `FSE-${k.invoice_no}`);
+      } catch (e) {
+        suggested = { found: false };
+        console.warn('[pipeline] lookupPodTransport failed:', (e as Error).message);
+      }
+      ev.onProgress({
+        id: fileId,
+        status: 'awaiting_transport_confirm',
+        suggested_transport: suggested,
+      });
+      return;
+    }
+
+    // If user provided a container override, surface it on the parsed object so
+    // the resolver picks it up.
     if (options.manualContainer) {
       k.container = options.manualContainer;
     }

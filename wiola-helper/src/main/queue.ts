@@ -8,7 +8,8 @@ import { app } from 'electron';
 
 export type InvoiceStatus =
   | 'waiting' | 'parsing' | 'processing' | 'done' | 'failed'
-  | 'ambiguous' | 'unknown_sku' | 'delay' | 'missing_transport';
+  | 'ambiguous' | 'unknown_sku' | 'delay' | 'missing_transport'
+  | 'awaiting_transport_confirm';
 
 export interface ParsedLine {
   ewi_sku: string;
@@ -67,6 +68,18 @@ export interface InvoiceState {
   // Set when resolver puts the invoice in ambiguous state — explains WHY
   // it's pending so the UI doesn't just say "granica miesiąca" for truck cases.
   pending_message?: string;
+  // MySQL pre-lookup result shown in the confirm-transport modal.
+  suggested_transport?: {
+    found: boolean;
+    pod_id?: number;
+    branch_id?: number;
+    truck_reg_number?: string | null;
+    is_placeholder?: boolean;
+    is_container?: boolean;
+    delivered?: boolean;
+    delivery_date?: string | null;
+    invoice_date?: string | null;
+  };
 }
 
 const STATE_DIR = path.join(app.getPath('userData'), 'state');
@@ -129,6 +142,15 @@ export class InvoiceQueue extends EventEmitter {
       }
       // missing_transport persists across restarts intentionally so the user
       // can resolve it after re-opening — nothing to reset.
+      // awaiting_transport_confirm carries an in-memory suggestion (MySQL
+      // POD data) that's expensive to refetch but cheap enough to refetch
+      // on the next processAll run — drop status back to waiting so the
+      // pipeline re-runs the lookup with fresh data.
+      if (inv.status === 'awaiting_transport_confirm') {
+        inv.status = 'waiting';
+        delete inv.suggested_transport;
+        delete inv.progress;
+      }
     }
     if (hungReset > 0) {
       console.warn(`Resetowanie ${hungReset} faktur zawieszonych w trakcie parsowania/przetwarzania`);
@@ -267,6 +289,32 @@ export class InvoiceQueue extends EventEmitter {
   remove(id: string) {
     this.queue = this.queue.filter(q => q.id !== id);
     this.pending = this.pending.filter(p => p.id !== id);
+    this.save();
+    this.emit('change');
+  }
+
+  // Resolve an awaiting_transport_confirm invoice with user's decision.
+  //   halt=true   → stop the entire batch right here (status=failed)
+  //   else        → set manual_container (+ optional manual_hmrc_month),
+  //                 status=waiting so processAll re-runs the pipeline
+  confirmTransport(id: string, opts: { transport: string; hmrcMonth?: string; halt?: boolean }) {
+    const inv = this.queue.find(q => q.id === id);
+    if (!inv) return;
+    if (opts.halt) {
+      inv.status = 'failed';
+      inv.error = 'Zatrzymane przez użytkownika podczas potwierdzania transportu';
+      delete inv.progress;
+      delete inv.suggested_transport;
+      this.save();
+      this.emit('change');
+      return;
+    }
+    inv.manual_container = opts.transport;
+    if (opts.hmrcMonth) inv.manual_hmrc_month = opts.hmrcMonth;
+    inv.status = 'waiting';
+    delete inv.error;
+    delete inv.progress;
+    delete inv.suggested_transport;
     this.save();
     this.emit('change');
   }

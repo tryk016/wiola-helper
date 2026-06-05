@@ -24,6 +24,7 @@ const statusBadge = (status: Invoice['status']) => {
     unknown_sku: { icon: '⚠️', color: 'text-amber-400', label: 'Nieznany produkt' },
     delay: { icon: '⏱', color: 'text-purple-300', label: 'Czekam (anti-bot)' },
     missing_transport: { icon: '🚛', color: 'text-orange-400', label: 'Brak danych transportu — klik' },
+    awaiting_transport_confirm: { icon: '🚛', color: 'text-blue-300', label: 'Potwierdź transport — klik' },
   };
   return map[status] || map.waiting;
 };

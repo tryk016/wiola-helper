@@ -9,6 +9,7 @@ import { PendingResolvedModal } from './components/PendingResolvedModal';
 import { DuplicatesModal } from './components/DuplicatesModal';
 import { ChooseMonthModal } from './components/ChooseMonthModal';
 import { MissingTransportModal } from './components/MissingTransportModal';
+import { ConfirmTransportModal } from './components/ConfirmTransportModal';
 import { HistoryView } from './components/HistoryView';
 import { SettingsView } from './components/SettingsView';
 import { LogView } from './components/LogView';
@@ -19,6 +20,17 @@ export function App() {
   const store = useStore();
   const [chooseMonthFor, setChooseMonthFor] = useState<Invoice | null>(null);
   const [missingTransportFor, setMissingTransportFor] = useState<Invoice | null>(null);
+  const [confirmTransportFor, setConfirmTransportFor] = useState<Invoice | null>(null);
+
+  // Auto-open the confirm-transport modal as soon as the pipeline halts on
+  // a fresh awaiting_transport_confirm. We use the currently selected
+  // invoice's status as a trigger so the modal shows for the first item
+  // hitting that state in a batch — the user can still click later items
+  // manually if multiple end up there.
+  useEffect(() => {
+    const pending = store.queue.find(q => q.status === 'awaiting_transport_confirm');
+    if (pending && !confirmTransportFor) setConfirmTransportFor(pending);
+  }, [store.queue, confirmTransportFor]);
 
   useEffect(() => {
     // Initial state
@@ -118,6 +130,7 @@ export function App() {
             onSelect={(inv) => {
               store.select(inv.id);
               if (inv.status === 'missing_transport') setMissingTransportFor(inv);
+              if (inv.status === 'awaiting_transport_confirm') setConfirmTransportFor(inv);
             }}
             onClearDone={async () => { await window.wiola.clearDone(); }}
             onClearFailed={async () => { await window.wiola.clearFailed(); }}
@@ -209,6 +222,13 @@ export function App() {
           invoice={missingTransportFor}
           onClose={() => setMissingTransportFor(null)}
           onSubmit={async (transport) => { await window.wiola.resolveTransport(missingTransportFor.id, transport); }}
+        />
+      )}
+      {confirmTransportFor && (
+        <ConfirmTransportModal
+          invoice={confirmTransportFor}
+          onClose={() => setConfirmTransportFor(null)}
+          onSubmit={async (opts) => { await window.wiola.confirmTransport(confirmTransportFor.id, opts); }}
         />
       )}
       {store.historyViewOpen && (

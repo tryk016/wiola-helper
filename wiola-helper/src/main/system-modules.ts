@@ -48,6 +48,19 @@ export const parseKreiselWithLlm = require(`${SYSTEM_PATH}/parse_kreisel_llm.js`
 export const resolveImport = require(`${SYSTEM_PATH}/resolve_import.js`).resolveImport as
   (refOrParsed: unknown) => Promise<unknown>;
 
+export const lookupPodTransport = require(`${SYSTEM_PATH}/resolve_import.js`).lookupPodTransport as
+  (kreiselRef: string) => Promise<{
+    found: boolean;
+    pod_id?: number;
+    branch_id?: number;
+    truck_reg_number?: string | null;
+    is_placeholder?: boolean;
+    is_container?: boolean;
+    delivered?: boolean;
+    delivery_date?: string | null;
+    invoice_date?: string | null;
+  }>;
+
 export const getRate = require(`${SYSTEM_PATH}/hmrc_rate.js`).getRate as
   (month: string, currency: string) => Promise<{ rate: number; year: number; month: number }>;
 

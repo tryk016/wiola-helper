@@ -7,7 +7,8 @@ export type InvoiceStatus =
   | 'ambiguous'
   | 'unknown_sku'
   | 'delay'
-  | 'missing_transport';
+  | 'missing_transport'
+  | 'awaiting_transport_confirm';
 
 export interface ParsedLine {
   ewi_sku: string;
@@ -44,6 +45,17 @@ export interface Invoice {
   error?: string;
   delay_until?: number;  // unix ms — when the anti-automation delay ends
   pending_message?: string;
+  suggested_transport?: {
+    found: boolean;
+    pod_id?: number;
+    branch_id?: number;
+    truck_reg_number?: string | null;
+    is_placeholder?: boolean;
+    is_container?: boolean;
+    delivered?: boolean;
+    delivery_date?: string | null;
+    invoice_date?: string | null;
+  };
 }
 
 export interface Health {

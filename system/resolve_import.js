@@ -303,7 +303,35 @@ async function resolveImport(kreiselRefOrParsed) {
   };
 }
 
-module.exports = { resolveImport, heuristicHmrcMonth };
+/**
+ * Lightweight MySQL lookup used by the GUI to pre-fill the
+ * "Confirm transport" modal when the PDF has no container.
+ * Returns the raw truck_reg_number from purchase_orders_deliveries
+ * (which the warehouse may set to a real plate, a placeholder like
+ * the invoice ref, or empty). Flags placeholder format for the UI.
+ */
+async function lookupPodTransport(kreiselInvoiceRef) {
+  const rows = await getPodRow(kreiselInvoiceRef);
+  if (!rows.length) return { found: false };
+  // Pick most recent
+  const r = rows[0];
+  const truck = (r.truck_reg_number || '').trim();
+  const isPlaceholder = !!truck && (/^\d+\/\d{4}\/EXP$/i.test(truck) || /^FSE/i.test(truck));
+  const isContainer = isContainerNumber(truck);
+  return {
+    found: true,
+    pod_id: r.id,
+    branch_id: r.branch_id,
+    truck_reg_number: truck || null,
+    is_placeholder: isPlaceholder,
+    is_container: isContainer,
+    delivered: !!r.delivered,
+    delivery_date: r.deliv_dt ? new Date(r.deliv_dt).toISOString().slice(0, 10) : null,
+    invoice_date: r.inv_dt ? new Date(r.inv_dt).toISOString().slice(0, 10) : null,
+  };
+}
+
+module.exports = { resolveImport, heuristicHmrcMonth, lookupPodTransport };
 
 if (require.main === module) {
   (async () => {

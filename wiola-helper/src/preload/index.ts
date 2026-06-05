@@ -17,6 +17,8 @@ const api = {
     ipcRenderer.invoke('pending:resolveMonth', id, hmrcMonth),
   resolveTransport: (id: string, transport: string) =>
     ipcRenderer.invoke('queue:resolveTransport', id, transport),
+  confirmTransport: (id: string, opts: { transport: string; hmrcMonth?: string; halt?: boolean }) =>
+    ipcRenderer.invoke('queue:confirmTransport', id, opts),
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
   applyUpdate: () => ipcRenderer.invoke('update:apply'),
   getLocalVersion: () => ipcRenderer.invoke('update:localVersion'),

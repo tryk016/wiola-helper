@@ -12,6 +12,7 @@ interface WiolaApi {
   skipDelay: (id: string) => Promise<boolean>;
   resolveAmbiguousMonth: (id: string, hmrcMonth: string) => Promise<unknown>;
   resolveTransport: (id: string, transport: string) => Promise<unknown>;
+  confirmTransport: (id: string, opts: { transport: string; hmrcMonth?: string; halt?: boolean }) => Promise<unknown>;
   clearDone: () => Promise<void>;
   clearFailed: () => Promise<void>;
   clearHistory: () => Promise<void>;
