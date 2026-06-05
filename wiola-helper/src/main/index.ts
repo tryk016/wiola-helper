@@ -134,6 +134,11 @@ ipcMain.handle('queue:retry', (_, id: string) => {
   return queue.state();
 });
 
+ipcMain.handle('pending:resolveMonth', (_, id: string, hmrcMonth: string) => {
+  queue.resolveAmbiguous(id, hmrcMonth);
+  return queue.state();
+});
+
 ipcMain.handle('update:check', () => checkForUpdate());
 ipcMain.handle('update:apply', () => applyUpdate());
 ipcMain.handle('update:localVersion', () => getLocalSha());
@@ -202,6 +207,8 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
         pendingUnknownSku.set(fileId, resolve);
         mainWindow?.webContents.send('modal:unknownSku', { fileId, unmapped });
       }),
+    }, {
+      manualHmrcMonth: inv.manual_hmrc_month,
     });
     const inAfter = queue.state().queue.find(q => q.id === inv.id) || queue.state().pending.find(p => p.id === inv.id);
     if (inAfter && ['failed', 'ambiguous', 'unknown_sku'].includes(inAfter.status)) {

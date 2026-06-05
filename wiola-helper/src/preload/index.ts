@@ -12,6 +12,8 @@ const api = {
   enqueueForce: (paths: string[]) => ipcRenderer.invoke('queue:enqueueForce', paths),
   remove: (id: string) => ipcRenderer.invoke('queue:remove', id),
   retry: (id: string) => ipcRenderer.invoke('queue:retry', id),
+  resolveAmbiguousMonth: (id: string, hmrcMonth: string) =>
+    ipcRenderer.invoke('pending:resolveMonth', id, hmrcMonth),
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
   applyUpdate: () => ipcRenderer.invoke('update:apply'),
   getLocalVersion: () => ipcRenderer.invoke('update:localVersion'),

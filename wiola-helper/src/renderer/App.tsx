@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { DropZone } from './components/DropZone';
 import { Queue } from './components/Queue';
 import { Pending } from './components/Pending';
@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar';
 import { UnknownSkuModal } from './components/UnknownSkuModal';
 import { PendingResolvedModal } from './components/PendingResolvedModal';
 import { DuplicatesModal } from './components/DuplicatesModal';
+import { ChooseMonthModal } from './components/ChooseMonthModal';
 import { HistoryView } from './components/HistoryView';
 import { SettingsView } from './components/SettingsView';
 import { LogView } from './components/LogView';
@@ -15,6 +16,7 @@ import type { Invoice, Health } from './types';
 
 export function App() {
   const store = useStore();
+  const [chooseMonthFor, setChooseMonthFor] = useState<Invoice | null>(null);
 
   useEffect(() => {
     // Initial state
@@ -118,7 +120,10 @@ export function App() {
             onRetry={async (id) => { await window.wiola.retry(id); }}
             selectedId={store.selectedId}
           />
-          <Pending invoices={store.pending} onSelect={(inv) => store.select(inv.id)} />
+          <Pending
+            invoices={store.pending}
+            onSelect={(inv) => { store.select(inv.id); setChooseMonthFor(inv); }}
+          />
         </section>
 
         <section className="flex-1 overflow-y-auto bg-slate-950">
@@ -185,6 +190,13 @@ export function App() {
             store.closeDuplicates();
           }}
           onClose={() => store.closeDuplicates()}
+        />
+      )}
+      {chooseMonthFor && (
+        <ChooseMonthModal
+          invoice={chooseMonthFor}
+          onClose={() => setChooseMonthFor(null)}
+          onPick={async (m) => { await window.wiola.resolveAmbiguousMonth(chooseMonthFor.id, m); }}
         />
       )}
       {store.historyViewOpen && (

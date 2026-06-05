@@ -15,6 +15,13 @@ interface PipelineEvents {
   onUnknownSku: (ctx: { fileId: string; unmapped: unknown[] }) => Promise<{ skip: boolean; mappings?: Record<string, string> }>;
 }
 
+interface PipelineOptions {
+  /** Override resolver: if set, pipeline uses this HMRC month directly and skips
+   *  resolveImport(). Set by the renderer when the user picks a month for an
+   *  ambiguous-month invoice via the wybór miesiąca modal. */
+  manualHmrcMonth?: string;
+}
+
 type ParsedKreisel = {
   invoice_no: string;
   kreisel_ref?: string;
@@ -64,7 +71,8 @@ export async function runPipeline(
   fileId: string,
   pdfPath: string,
   post: boolean,
-  ev: PipelineEvents
+  ev: PipelineEvents,
+  options: PipelineOptions = {}
 ): Promise<void> {
   try {
     // 1. PARSE
@@ -97,39 +105,52 @@ export async function runPipeline(
       container: k.container ?? undefined,
     });
 
-    // 2. RESOLVE HMRC month
-    const resolved = (await resolveImport(k)) as ResolverResult;
-
-    if (resolved.status === 'ambiguous_month') {
+    // 2. RESOLVE HMRC month — skipped entirely if user supplied a manual override
+    let chosenHmrcMonth: string;
+    if (options.manualHmrcMonth) {
+      chosenHmrcMonth = options.manualHmrcMonth;
       ev.onProgress({
         id: fileId,
-        status: 'ambiguous',
-        hmrc_month_options: [
-          resolved.hmrc_month,
-          resolved.alternative_hmrc_month,
-        ].filter(Boolean) as string[],
-        predicted_ata_uk: resolved.predicted_ata_uk,
-        days_waiting: 0,
+        progress: 50,
+        hmrc_month: chosenHmrcMonth,
+        resolver_source: 'manual',
+        resolver_confidence: 'predicted',
       });
-      return;
-    }
+    } else {
+      const resolved = (await resolveImport(k)) as ResolverResult;
 
-    if (resolved.status !== 'ok' || !resolved.hmrc_month) {
-      ev.onProgress({ id: fileId, status: 'failed', error: `Resolver: ${resolved.status}` });
-      return;
-    }
+      if (resolved.status === 'ambiguous_month') {
+        ev.onProgress({
+          id: fileId,
+          status: 'ambiguous',
+          hmrc_month_options: [
+            resolved.hmrc_month,
+            resolved.alternative_hmrc_month,
+          ].filter(Boolean) as string[],
+          predicted_ata_uk: resolved.predicted_ata_uk,
+          days_waiting: 0,
+        });
+        return;
+      }
 
-    ev.onProgress({
-      id: fileId,
-      progress: 50,
-      hmrc_month: resolved.hmrc_month,
-      ata_uk: resolved.ata_uk,
-      resolver_source: resolved.source,
-      resolver_confidence: resolved.confidence,
-    });
+      if (resolved.status !== 'ok' || !resolved.hmrc_month) {
+        ev.onProgress({ id: fileId, status: 'failed', error: `Resolver: ${resolved.status}` });
+        return;
+      }
+
+      chosenHmrcMonth = resolved.hmrc_month;
+      ev.onProgress({
+        id: fileId,
+        progress: 50,
+        hmrc_month: resolved.hmrc_month,
+        ata_uk: resolved.ata_uk,
+        resolver_source: resolved.source,
+        resolver_confidence: resolved.confidence,
+      });
+    }
 
     // 3. HMRC rate
-    const hmrc = await getRate(resolved.hmrc_month, 'PLN');
+    const hmrc = await getRate(chosenHmrcMonth, 'PLN');
     ev.onProgress({ id: fileId, progress: 60, hmrc_rate: hmrc.rate });
 
     // 4. Build payloads

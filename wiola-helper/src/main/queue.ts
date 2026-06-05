@@ -51,6 +51,10 @@ export interface InvoiceState {
   added_at?: number;     // unix ms
   completed_at?: number; // unix ms — when moved to history
   unmapped_lines?: unknown[];
+  // Manual HMRC month override — set when the user resolves an ambiguous
+  // month via the "wybór miesiąca" modal. If present, pipeline skips
+  // resolveImport() and uses this value directly.
+  manual_hmrc_month?: string;
 }
 
 const STATE_DIR = path.join(app.getPath('userData'), 'state');
@@ -243,6 +247,24 @@ export class InvoiceQueue extends EventEmitter {
   remove(id: string) {
     this.queue = this.queue.filter(q => q.id !== id);
     this.pending = this.pending.filter(p => p.id !== id);
+    this.save();
+    this.emit('change');
+  }
+
+  // Resolve an ambiguous-month invoice: user picked a specific HMRC month.
+  // Moves the invoice back to the main queue with manual_hmrc_month set,
+  // status='waiting'. Next processAll run will skip the resolver for it.
+  resolveAmbiguous(id: string, hmrcMonth: string) {
+    const idxPending = this.pending.findIndex(p => p.id === id);
+    if (idxPending < 0) return;
+    const inv = this.pending[idxPending];
+    inv.manual_hmrc_month = hmrcMonth;
+    inv.hmrc_month = hmrcMonth;     // surface in sidebar for feedback
+    inv.status = 'waiting';
+    delete inv.error;
+    delete inv.progress;
+    this.pending.splice(idxPending, 1);
+    this.queue.push(inv);
     this.save();
     this.emit('change');
   }
