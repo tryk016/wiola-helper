@@ -8,8 +8,19 @@ import { readEnv, writeEnv, type EnvVars } from './settings';
 
 const AUTHORIZE_URL = 'https://appcenter.intuit.com/connect/oauth2';
 const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-const REDIRECT_URI = 'http://localhost:3000/callback';
 const SCOPE = 'com.intuit.quickbooks.accounting';
+
+// Intuit requires HTTPS for Production redirect URIs (HTTP rejected with
+// "Please enter a unique valid redirect URI"). Sandbox accepts HTTP/localhost.
+// For production we use a static HTTPS bouncer page on GitHub Pages — the
+// BrowserWindow's will-redirect handler intercepts the navigation BEFORE the
+// page actually loads, so the page content is just a fallback for the user.
+const REDIRECT_URI_SANDBOX    = 'http://localhost:3000/callback';
+const REDIRECT_URI_PRODUCTION = 'https://tryk016.github.io/wiola-helper/oauth-callback.html';
+
+function redirectUriFor(envVal: string | undefined): string {
+  return envVal === 'production' ? REDIRECT_URI_PRODUCTION : REDIRECT_URI_SANDBOX;
+}
 
 export interface OauthResult {
   ok: boolean;
@@ -19,24 +30,24 @@ export interface OauthResult {
   error?: string;
 }
 
-function buildAuthUrl(clientId: string, role: 'pro' | 'store'): string {
+function buildAuthUrl(clientId: string, role: 'pro' | 'store', redirectUri: string): string {
   const state = `${role}_${Date.now()}`;
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
     scope: SCOPE,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
     state,
   });
   return `${AUTHORIZE_URL}?${params.toString()}`;
 }
 
-async function exchangeCodeForTokens(clientId: string, clientSecret: string, code: string) {
+async function exchangeCodeForTokens(clientId: string, clientSecret: string, code: string, redirectUri: string) {
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
   }).toString();
   const res = await axios.post(TOKEN_URL, body, {
     headers: {
@@ -71,8 +82,9 @@ export async function startOauthFlow(
   const refreshKey =
     role === 'pro' ? 'QBO_EWIPRO_REFRESH_TOKEN' : 'QBO_EWISTORE_REFRESH_TOKEN';
 
-  const authUrl = buildAuthUrl(clientId, role);
   const isProduction = env.QBO_ENV === 'production';
+  const redirectUri = redirectUriFor(env.QBO_ENV);
+  const authUrl = buildAuthUrl(clientId, role, redirectUri);
 
   return new Promise<OauthResult>((resolve) => {
     let resolved = false;
@@ -97,7 +109,7 @@ export async function startOauthFlow(
     });
 
     const handleRedirect = (url: string) => {
-      if (!url.startsWith(REDIRECT_URI)) return false;
+      if (!url.startsWith(redirectUri)) return false;
       const u = new URL(url);
       const code = u.searchParams.get('code');
       const realmId = u.searchParams.get('realmId');
@@ -122,7 +134,7 @@ export async function startOauthFlow(
         );
       }
 
-      exchangeCodeForTokens(clientId, clientSecret, code)
+      exchangeCodeForTokens(clientId, clientSecret, code, redirectUri)
         .then((tokens) => {
           // ALWAYS save realm ID from OAuth (Intuit returns the actually-authorized company).
           // If user picked wrong company, they'll see the new realm ID in UI and can re-login.
@@ -154,7 +166,7 @@ export async function startOauthFlow(
             ok: false,
             error:
               `Wymiana code → token nie powiodła się: ${(e as Error).message}\n\n` +
-              `Upewnij się że ${REDIRECT_URI} jest dodany w Intuit Developer → Twoja apka → Keys & Credentials → Redirect URIs.`,
+              `Upewnij się że ${redirectUri} jest dodany w Intuit Developer → Twoja apka → Keys & Credentials → Redirect URIs (${isProduction ? 'tab Production' : 'tab Development'}).`,
           });
         });
 
