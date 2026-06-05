@@ -6,7 +6,8 @@ export type InvoiceStatus =
   | 'failed'
   | 'ambiguous'
   | 'unknown_sku'
-  | 'delay';
+  | 'delay'
+  | 'missing_transport';
 
 export interface ParsedLine {
   ewi_sku: string;

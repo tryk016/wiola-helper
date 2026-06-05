@@ -157,6 +157,11 @@ ipcMain.handle('pending:resolveMonth', (_, id: string, hmrcMonth: string) => {
   return queue.state();
 });
 
+ipcMain.handle('queue:resolveTransport', (_, id: string, transport: string) => {
+  queue.resolveMissingTransport(id, transport);
+  return queue.state();
+});
+
 ipcMain.handle('update:check', () => checkForUpdate());
 ipcMain.handle('update:apply', () => applyUpdate());
 ipcMain.handle('update:localVersion', () => getLocalSha());
@@ -248,9 +253,10 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
       }),
     }, {
       manualHmrcMonth: inv.manual_hmrc_month,
+      manualContainer: inv.manual_container,
     });
     const inAfter = queue.state().queue.find(q => q.id === inv.id) || queue.state().pending.find(p => p.id === inv.id);
-    if (inAfter && ['failed', 'ambiguous', 'unknown_sku'].includes(inAfter.status)) {
+    if (inAfter && ['failed', 'ambiguous', 'unknown_sku', 'missing_transport'].includes(inAfter.status)) {
       halted = true;
       haltedAt = inv.kreisel_ref;
       console.warn(`Halted at ${inv.kreisel_ref} (status=${inAfter.status}); remaining ${sorted.length - processed - 1} held.`);

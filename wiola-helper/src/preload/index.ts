@@ -15,6 +15,8 @@ const api = {
   skipDelay: (id: string) => ipcRenderer.invoke('queue:skipDelay', id),
   resolveAmbiguousMonth: (id: string, hmrcMonth: string) =>
     ipcRenderer.invoke('pending:resolveMonth', id, hmrcMonth),
+  resolveTransport: (id: string, transport: string) =>
+    ipcRenderer.invoke('queue:resolveTransport', id, transport),
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
   applyUpdate: () => ipcRenderer.invoke('update:apply'),
   getLocalVersion: () => ipcRenderer.invoke('update:localVersion'),

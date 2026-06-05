@@ -23,6 +23,7 @@ const statusBadge = (status: Invoice['status']) => {
     ambiguous: { icon: '⏸', color: 'text-amber-400', label: 'Granica miesiąca' },
     unknown_sku: { icon: '⚠️', color: 'text-amber-400', label: 'Nieznany produkt' },
     delay: { icon: '⏱', color: 'text-purple-300', label: 'Czekam (anti-bot)' },
+    missing_transport: { icon: '🚛', color: 'text-orange-400', label: 'Brak danych transportu — klik' },
   };
   return map[status] || map.waiting;
 };
@@ -111,7 +112,7 @@ export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, on
             const badge = statusBadge(inv.status);
             const isSelected = inv.id === selectedId;
             const removable = ['failed', 'done', 'waiting', 'unknown_sku'].includes(inv.status);
-            const retryable = ['failed', 'ambiguous', 'unknown_sku'].includes(inv.status);
+            const retryable = ['failed', 'ambiguous', 'unknown_sku', 'missing_transport'].includes(inv.status);
             return (
               <div
                 key={inv.id}

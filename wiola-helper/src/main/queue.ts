@@ -8,7 +8,7 @@ import { app } from 'electron';
 
 export type InvoiceStatus =
   | 'waiting' | 'parsing' | 'processing' | 'done' | 'failed'
-  | 'ambiguous' | 'unknown_sku' | 'delay';
+  | 'ambiguous' | 'unknown_sku' | 'delay' | 'missing_transport';
 
 export interface ParsedLine {
   ewi_sku: string;
@@ -58,6 +58,11 @@ export interface InvoiceState {
   // Timestamp (unix ms) when the random anti-automation delay expires.
   // Renderer counts down to this so the user sees "Następna za 5:23".
   delay_until?: number;
+  // Manual transport override — set when the user resolves a missing_transport
+  // block. Either a container number (4 letters + 7 digits → triggers Magemar
+  // lookup) or a truck registration (anything else → +3d prediction).
+  // Empty string "" means "no transport info, accept the +3d truck prediction".
+  manual_container?: string;
 }
 
 const STATE_DIR = path.join(app.getPath('userData'), 'state');
@@ -118,6 +123,8 @@ export class InvoiceQueue extends EventEmitter {
         delete inv.delay_until;
         delete inv.progress;
       }
+      // missing_transport persists across restarts intentionally so the user
+      // can resolve it after re-opening — nothing to reset.
     }
     if (hungReset > 0) {
       console.warn(`Resetowanie ${hungReset} faktur zawieszonych w trakcie parsowania/przetwarzania`);
@@ -256,6 +263,20 @@ export class InvoiceQueue extends EventEmitter {
   remove(id: string) {
     this.queue = this.queue.filter(q => q.id !== id);
     this.pending = this.pending.filter(p => p.id !== id);
+    this.save();
+    this.emit('change');
+  }
+
+  // Resolve a missing_transport invoice: user provided a container/truck number
+  // (or "" to accept the default truck +3d prediction).
+  resolveMissingTransport(id: string, transport: string) {
+    const inv = this.queue.find(q => q.id === id);
+    if (!inv) return;
+    if (inv.status !== 'missing_transport' && inv.status !== 'failed') return;
+    inv.manual_container = transport;
+    inv.status = 'waiting';
+    delete inv.error;
+    delete inv.progress;
     this.save();
     this.emit('change');
   }

@@ -8,6 +8,7 @@ import { UnknownSkuModal } from './components/UnknownSkuModal';
 import { PendingResolvedModal } from './components/PendingResolvedModal';
 import { DuplicatesModal } from './components/DuplicatesModal';
 import { ChooseMonthModal } from './components/ChooseMonthModal';
+import { MissingTransportModal } from './components/MissingTransportModal';
 import { HistoryView } from './components/HistoryView';
 import { SettingsView } from './components/SettingsView';
 import { LogView } from './components/LogView';
@@ -17,6 +18,7 @@ import type { Invoice, Health } from './types';
 export function App() {
   const store = useStore();
   const [chooseMonthFor, setChooseMonthFor] = useState<Invoice | null>(null);
+  const [missingTransportFor, setMissingTransportFor] = useState<Invoice | null>(null);
 
   useEffect(() => {
     // Initial state
@@ -113,7 +115,10 @@ export function App() {
             invoices={store.queue}
             stats={stats}
             onProcessAll={handleProcessAll}
-            onSelect={(inv) => store.select(inv.id)}
+            onSelect={(inv) => {
+              store.select(inv.id);
+              if (inv.status === 'missing_transport') setMissingTransportFor(inv);
+            }}
             onClearDone={async () => { await window.wiola.clearDone(); }}
             onClearFailed={async () => { await window.wiola.clearFailed(); }}
             onRemove={async (id) => { await window.wiola.remove(id); }}
@@ -197,6 +202,13 @@ export function App() {
           invoice={chooseMonthFor}
           onClose={() => setChooseMonthFor(null)}
           onPick={async (m) => { await window.wiola.resolveAmbiguousMonth(chooseMonthFor.id, m); }}
+        />
+      )}
+      {missingTransportFor && (
+        <MissingTransportModal
+          invoice={missingTransportFor}
+          onClose={() => setMissingTransportFor(null)}
+          onSubmit={async (transport) => { await window.wiola.resolveTransport(missingTransportFor.id, transport); }}
         />
       )}
       {store.historyViewOpen && (

@@ -20,6 +20,10 @@ interface PipelineOptions {
    *  resolveImport(). Set by the renderer when the user picks a month for an
    *  ambiguous-month invoice via the wybór miesiąca modal. */
   manualHmrcMonth?: string;
+  /** Override transport: set when the user resolved a missing_transport block.
+   *  Empty string "" = "no info, accept truck +3d prediction".
+   *  Otherwise: container number (4 letters + 7 digits) or truck registration. */
+  manualContainer?: string;
 }
 
 type ParsedKreisel = {
@@ -104,6 +108,26 @@ export async function runPipeline(
       lines: k.lines.length,
       container: k.container ?? undefined,
     });
+
+    // 1.5. TRANSPORT CHECK — block if PDF has no container AND user hasn't
+    // supplied a manual override yet. options.manualContainer === undefined
+    // means "user hasn't been asked"; "" means "asked, said no info".
+    const effectiveContainer = options.manualContainer !== undefined
+      ? options.manualContainer
+      : (k.container || null);
+    if (!effectiveContainer && options.manualContainer === undefined) {
+      ev.onProgress({
+        id: fileId,
+        status: 'missing_transport',
+        error: 'Brak numeru kontenera lub auta na fakturze — wpisz dane transportu lub potwierdź "brak"',
+      });
+      return;
+    }
+    // If user provided a container override, surface it on the parsed object so
+    // the resolver picks it up (resolver reads kreiselRefOrParsed.container).
+    if (options.manualContainer) {
+      k.container = options.manualContainer;
+    }
 
     // 2. RESOLVE HMRC month — skipped entirely if user supplied a manual override
     let chosenHmrcMonth: string;
