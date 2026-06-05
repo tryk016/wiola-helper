@@ -21,6 +21,20 @@ function apiBase() {
     : 'https://sandbox-quickbooks.api.intuit.com/v3/company';
 }
 
+/**
+ * Sandbox and Production are two separate apps in Intuit Developer with
+ * their own Client ID + Client Secret. Allow both pairs in .env at the
+ * same time, picked by QBO_ENV. Backward-compat: if the per-environment
+ * variant is missing, fall back to the legacy un-suffixed QBO_CLIENT_ID /
+ * QBO_CLIENT_SECRET (which previously stored whichever env was active).
+ */
+function getQboCredentials() {
+  const env = process.env.QBO_ENV === 'production' ? 'PRODUCTION' : 'SANDBOX';
+  const id = process.env[`QBO_CLIENT_ID_${env}`] || process.env.QBO_CLIENT_ID;
+  const secret = process.env[`QBO_CLIENT_SECRET_${env}`] || process.env.QBO_CLIENT_SECRET;
+  return { id, secret, envLabel: env };
+}
+
 function envFor(which) {
   const w = which.toLowerCase();
   if (w === 'pro' || w === 'ewipro') {
@@ -46,9 +60,13 @@ function persistRefresh(refreshKey, newToken) {
 }
 
 async function refreshAccessToken(refreshToken) {
-  const id = process.env.QBO_CLIENT_ID;
-  const secret = process.env.QBO_CLIENT_SECRET;
-  if (!id || !secret) throw new Error('QBO_CLIENT_ID / QBO_CLIENT_SECRET missing in .env');
+  const { id, secret, envLabel } = getQboCredentials();
+  if (!id || !secret) {
+    throw new Error(
+      `QBO_CLIENT_ID_${envLabel} / QBO_CLIENT_SECRET_${envLabel} missing in .env ` +
+      `(also tried legacy QBO_CLIENT_ID / QBO_CLIENT_SECRET fallback).`
+    );
+  }
   const basic = Buffer.from(`${id}:${secret}`).toString('base64');
   const res = await axios.post(
     TOKEN_URL,

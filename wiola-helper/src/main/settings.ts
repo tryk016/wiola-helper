@@ -29,8 +29,14 @@ const DEFAULT_PREFS: AppPrefs = {
 
 export interface EnvVars {
   QBO_ENV: string;
+  // Legacy single pair (still read as fallback for older installs)
   QBO_CLIENT_ID: string;
   QBO_CLIENT_SECRET: string;
+  // Per-environment pairs (Sandbox and Production are separate Intuit apps)
+  QBO_CLIENT_ID_SANDBOX: string;
+  QBO_CLIENT_SECRET_SANDBOX: string;
+  QBO_CLIENT_ID_PRODUCTION: string;
+  QBO_CLIENT_SECRET_PRODUCTION: string;
   QBO_EWIPRO_REALM_ID: string;
   QBO_EWISTORE_REALM_ID: string;
   QBO_EWIPRO_REFRESH_TOKEN: string;
@@ -81,6 +87,8 @@ export function maskedEnv(): Partial<EnvVars> {
   return {
     ...e,
     QBO_CLIENT_SECRET: mask(e.QBO_CLIENT_SECRET),
+    QBO_CLIENT_SECRET_SANDBOX: mask(e.QBO_CLIENT_SECRET_SANDBOX),
+    QBO_CLIENT_SECRET_PRODUCTION: mask(e.QBO_CLIENT_SECRET_PRODUCTION),
     QBO_EWIPRO_REFRESH_TOKEN: mask(e.QBO_EWIPRO_REFRESH_TOKEN),
     QBO_EWISTORE_REFRESH_TOKEN: mask(e.QBO_EWISTORE_REFRESH_TOKEN),
     ANTHROPIC_API_KEY: mask(e.ANTHROPIC_API_KEY),

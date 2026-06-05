@@ -70,11 +70,20 @@ export async function startOauthFlow(
   role: 'pro' | 'store'
 ): Promise<OauthResult> {
   const env = readEnv() as Partial<EnvVars>;
-  const clientId = env.QBO_CLIENT_ID;
-  const clientSecret = env.QBO_CLIENT_SECRET;
+  // Sandbox and Production have separate Client ID/Secret pairs in Intuit
+  // Developer. Pick the pair that matches QBO_ENV; fall back to the legacy
+  // un-suffixed names so older installs keep working until they migrate.
+  const envLabel = env.QBO_ENV === 'production' ? 'PRODUCTION' : 'SANDBOX';
+  const envRecord = env as unknown as Record<string, string | undefined>;
+  const clientId = envRecord[`QBO_CLIENT_ID_${envLabel}`] || env.QBO_CLIENT_ID;
+  const clientSecret = envRecord[`QBO_CLIENT_SECRET_${envLabel}`] || env.QBO_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    return { ok: false, error: 'Brak QBO_CLIENT_ID lub QBO_CLIENT_SECRET w .env. Wpisz je w sekcji "QBO Credentials" zanim się zalogujesz.' };
+    return {
+      ok: false,
+      error: `Brak QBO_CLIENT_ID_${envLabel} lub QBO_CLIENT_SECRET_${envLabel} w .env. ` +
+             `Wpisz je w Ustawieniach → "QBO Credentials" (${envLabel === 'PRODUCTION' ? 'Production' : 'Sandbox'}).`,
+    };
   }
 
   const expectedRealmId =

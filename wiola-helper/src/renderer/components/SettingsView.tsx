@@ -6,8 +6,15 @@ interface Props {
 
 interface EnvData {
   QBO_ENV?: string;
+  // Legacy single pair (still read as fallback for older installs)
   QBO_CLIENT_ID?: string;
   QBO_CLIENT_SECRET?: string;
+  // Per-environment pairs — what we use now. Sandbox and Production are
+  // two different apps in Intuit Developer with their own credentials.
+  QBO_CLIENT_ID_SANDBOX?: string;
+  QBO_CLIENT_SECRET_SANDBOX?: string;
+  QBO_CLIENT_ID_PRODUCTION?: string;
+  QBO_CLIENT_SECRET_PRODUCTION?: string;
   QBO_EWIPRO_REALM_ID?: string;
   QBO_EWISTORE_REALM_ID?: string;
   QBO_EWIPRO_REFRESH_TOKEN?: string;
@@ -118,10 +125,43 @@ export function SettingsView({ onClose }: Props) {
           </div>
         </Section>
 
-        {/* QBO Credentials */}
-        <Section title="🔑 QBO Credentials (Intuit Developer app)" subtitle="Te dane łączą się z twoją apką w Intuit Developer">
-          <Field label="Client ID" value={dirty.QBO_CLIENT_ID ?? env.QBO_CLIENT_ID} onChange={v => setField('QBO_CLIENT_ID', v)} mono />
-          <Field label="Client Secret" value={dirty.QBO_CLIENT_SECRET ?? env.QBO_CLIENT_SECRET} onChange={v => setField('QBO_CLIENT_SECRET', v)} mono secret />
+        {/* QBO Credentials — Sandbox + Production are two separate apps */}
+        <Section
+          title="🔑 QBO Credentials (Intuit Developer)"
+          subtitle="Sandbox i Production to dwie osobne aplikacje w Intuit — mają swoje klucze. Aplikacja wybiera zestaw automatycznie wg QBO Environment powyżej."
+        >
+          <div className="space-y-3">
+            <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 space-y-2">
+              <div className="text-xs uppercase tracking-wide text-amber-300 font-semibold">🧪 Sandbox (testowe)</div>
+              <Field
+                label="Sandbox Client ID"
+                value={dirty.QBO_CLIENT_ID_SANDBOX ?? env.QBO_CLIENT_ID_SANDBOX ?? (env.QBO_ENV !== 'production' ? env.QBO_CLIENT_ID : '')}
+                onChange={v => setField('QBO_CLIENT_ID_SANDBOX', v)}
+                mono
+              />
+              <Field
+                label="Sandbox Client Secret"
+                value={dirty.QBO_CLIENT_SECRET_SANDBOX ?? env.QBO_CLIENT_SECRET_SANDBOX ?? (env.QBO_ENV !== 'production' ? env.QBO_CLIENT_SECRET : '')}
+                onChange={v => setField('QBO_CLIENT_SECRET_SANDBOX', v)}
+                mono secret
+              />
+            </div>
+            <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 space-y-2">
+              <div className="text-xs uppercase tracking-wide text-emerald-300 font-semibold">🚀 Production (realne)</div>
+              <Field
+                label="Production Client ID"
+                value={dirty.QBO_CLIENT_ID_PRODUCTION ?? env.QBO_CLIENT_ID_PRODUCTION ?? (env.QBO_ENV === 'production' ? env.QBO_CLIENT_ID : '')}
+                onChange={v => setField('QBO_CLIENT_ID_PRODUCTION', v)}
+                mono
+              />
+              <Field
+                label="Production Client Secret"
+                value={dirty.QBO_CLIENT_SECRET_PRODUCTION ?? env.QBO_CLIENT_SECRET_PRODUCTION ?? (env.QBO_ENV === 'production' ? env.QBO_CLIENT_SECRET : '')}
+                onChange={v => setField('QBO_CLIENT_SECRET_PRODUCTION', v)}
+                mono secret
+              />
+            </div>
+          </div>
         </Section>
 
         {/* QBO Realms */}
