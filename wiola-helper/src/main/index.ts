@@ -13,6 +13,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const IS_DEV = !!process.env.VITE_DEV_SERVER_URL;
 
+// Global safety nets so a stray exception (e.g. "Object has been destroyed"
+// from a stale setTimeout reaching a closed BrowserWindow) does NOT take down
+// the whole app with the system "A JavaScript error occurred" dialog.
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaughtException:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] unhandledRejection:', reason);
+});
+
 let mainWindow: BrowserWindow | null = null;
 const queue = new InvoiceQueue();
 

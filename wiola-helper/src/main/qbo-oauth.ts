@@ -76,6 +76,11 @@ export async function startOauthFlow(
 
   return new Promise<OauthResult>((resolve) => {
     let resolved = false;
+    const safeClose = () => {
+      try {
+        if (authWindow && !authWindow.isDestroyed()) authWindow.close();
+      } catch { /* already gone */ }
+    };
     const authWindow = new BrowserWindow({
       width: 700,
       height: 850,
@@ -100,20 +105,22 @@ export async function startOauthFlow(
 
       if (errorParam) {
         resolved = true;
-        authWindow.close();
+        safeClose();
         resolve({ ok: false, error: `Intuit: ${errorParam} — ${u.searchParams.get('error_description') || ''}` });
         return true;
       }
 
       if (!code) return false;
 
-      // Show "exchanging" UI by loading a tiny inline page
-      authWindow.loadURL(
-        'data:text/html;charset=utf-8,' +
-          encodeURIComponent(
-            '<html><body style="font-family:Segoe UI;padding:50px;text-align:center;background:#f5f5f5"><div style="font-size:48px">⏳</div><h2>Pobieram token z Intuit...</h2><p style="color:#666">Za chwilę zamknę to okno.</p></body></html>'
-          )
-      );
+      // Show "exchanging" UI by loading a tiny inline page (if window still alive)
+      if (!authWindow.isDestroyed()) {
+        authWindow.loadURL(
+          'data:text/html;charset=utf-8,' +
+            encodeURIComponent(
+              '<html><body style="font-family:Segoe UI;padding:50px;text-align:center;background:#f5f5f5"><div style="font-size:48px">⏳</div><h2>Pobieram token z Intuit...</h2><p style="color:#666">Za chwilę zamknę to okno.</p></body></html>'
+            )
+        );
+      }
 
       exchangeCodeForTokens(clientId, clientSecret, code)
         .then((tokens) => {
@@ -132,7 +139,7 @@ export async function startOauthFlow(
           writeEnv(updates);
 
           resolved = true;
-          setTimeout(() => authWindow.close(), 1000);
+          setTimeout(safeClose, 1000);
           resolve({
             ok: true,
             realmId: realmId || undefined,
@@ -142,7 +149,7 @@ export async function startOauthFlow(
         })
         .catch((e) => {
           resolved = true;
-          authWindow.close();
+          safeClose();
           resolve({
             ok: false,
             error:
