@@ -188,7 +188,13 @@ export function DraftEditor({ invoice }: Props) {
                           placeholder="wpisz SKU (np. EWI-225)"
                         />
                       </div>
-                      {l.raw_desc && (!l.ewi_sku.trim() || l.raw_desc.trim().toUpperCase() !== l.ewi_sku.trim().toUpperCase()) && (
+                      {(l.ewi_sku === '__SAMPLE__' || l.ewi_sku === '__PALLET__') && (
+                        <div className="text-[10px] text-cyan-400 mt-0.5 pl-1">
+                          → {l.ewi_sku === '__SAMPLE__' ? 'ogólna próbka (EWI Sample)' : 'paleta (Pallet)'}
+                        </div>
+                      )}
+                      {l.raw_desc && l.ewi_sku !== '__SAMPLE__' && l.ewi_sku !== '__PALLET__' &&
+                        (!l.ewi_sku.trim() || l.raw_desc.trim().toUpperCase() !== l.ewi_sku.trim().toUpperCase()) && (
                         <div className="text-[10px] text-slate-500 mt-0.5 pl-1 truncate max-w-[220px]" title={l.raw_desc}>
                           {l.ewi_sku.trim() ? '' : '⚠ '}{l.raw_desc}
                         </div>
@@ -212,7 +218,14 @@ export function DraftEditor({ invoice }: Props) {
                     </td>
                     <td className="px-2 text-right font-mono text-slate-400">{c ? fmtGbp(c.rate_gbp) : '—'}</td>
                     <td className="pl-2 text-right font-mono text-emerald-300">{c ? fmtGbp(c.amount_gbp) : '—'}</td>
-                    <td className="text-right">
+                    <td className="text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setLine(idx, { ewi_sku: '__SAMPLE__', is_sample: true })}
+                        className="text-slate-600 hover:text-cyan-300 px-1"
+                        title="Ustaw jako ogólną próbkę (item EWI Sample) — dla jednorazowych próbek bez własnego produktu w QBO"
+                      >
+                        🧪
+                      </button>
                       <button
                         onClick={() => removeLine(idx)}
                         className="text-slate-600 hover:text-red-400 px-1"

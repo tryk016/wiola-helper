@@ -98,6 +98,27 @@ async function getItemId(client, name) {
     if (row) { _idCache[k] = row.Id; return row.Id; }
   }
 
+  // 4. Separator-insensitive match. QBO names sometimes use a SPACE where our
+  //    SKU uses a DASH (e.g. SKU "EWI-077-1.5A" vs QBO Name "EWI-077 1.5A").
+  //    Fetch candidates by the base code (letters + first number group) and
+  //    compare ignoring spaces / dashes / underscores.
+  const norm = (s) => (s || '').toUpperCase().replace(/[\s\-_]/g, '');
+  const baseM = /^([A-Za-z]+-?\d+)/.exec(searchName);
+  if (baseM) {
+    const base = baseM[1];
+    const want = norm(searchName);
+    const cand = await client.query(`SELECT Id, Name, Sku FROM Item WHERE Name LIKE '${base.replace(/'/g, "\\'")}%' MAXRESULTS 50`);
+    const hit = (cand.QueryResponse.Item || []).find(it => norm(it.Name) === want || norm(it.Sku) === want);
+    if (hit) { _idCache[k] = hit.Id; return hit.Id; }
+  }
+
+  // 5. Some setups store the product code in the Sku field, not Name.
+  try {
+    const bySku = await client.query(`SELECT Id FROM Item WHERE Sku = '${searchName.replace(/'/g, "\\'")}'`);
+    const r = bySku.QueryResponse.Item && bySku.QueryResponse.Item[0];
+    if (r) { _idCache[k] = r.Id; return r.Id; }
+  } catch (e) { /* Sku not queryable in some editions — ignore */ }
+
   throw new Error(`Item not found in realm ${client.realmId}: ${name} (searched: ${searchName})`);
 }
 
