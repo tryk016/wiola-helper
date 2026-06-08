@@ -11,6 +11,8 @@ import {
   getRate,
   qboClient,
   qboPayloads,
+  buildSaleLines,
+  roundHalfUp,
 } from './system-modules';
 import type { InvoiceState, ScanDraft } from './queue';
 
@@ -38,7 +40,9 @@ function extractError(e: unknown): string {
 
 interface PipelineEvents {
   onProgress: (patch: Partial<InvoiceState>) => void;
-  onUnknownSku: (ctx: { fileId: string; unmapped: unknown[] }) => Promise<{ skip: boolean; mappings?: Record<string, string> }>;
+  /** @deprecated Unknown-SKU lines are no longer a hard gate — they fold into
+   *  the editable draft for manual review. Kept optional for compatibility. */
+  onUnknownSku?: (ctx: { fileId: string; unmapped: unknown[] }) => Promise<{ skip: boolean; mappings?: Record<string, string> }>;
   /** Interactive pause when PDF has no container. The renderer shows
    *  ConfirmTransportModal with the suggested MySQL data; the pipeline
    *  awaits the user's choice and continues with the response inline.
@@ -133,20 +137,22 @@ export async function scanInvoice(
     ev.onProgress({ id: fileId, status: 'parsing', progress: 10 });
     const k = (await parseKreiselWithLlm(pdfPath)) as ParsedKreisel;
 
+    // Unknown-SKU lines are NO LONGER a hard gate — the user reviews and fixes
+    // every line in the editor. Fold any unmapped line into the draft as a
+    // blank-SKU row (keeping the original Kreisel description) so it shows up
+    // for manual correction instead of being silently dropped or blocking scan.
     if (k.unmapped_lines?.length) {
-      ev.onProgress({
-        id: fileId,
-        status: 'unknown_sku',
-        unmapped_lines: k.unmapped_lines,
-        kreisel_ref: k.kreisel_ref,
-        lines: k.lines.length + k.unmapped_lines.length,
-      });
-      const r = await ev.onUnknownSku({ fileId, unmapped: k.unmapped_lines });
-      if (r.skip) {
-        ev.onProgress({ id: fileId, status: 'failed', error: 'Pominięto — nieznane SKU' });
-        return;
+      for (const u of k.unmapped_lines) {
+        k.lines.push({
+          ewi_sku: '',
+          qty_kreisel: u.qty,
+          qty_ewi: u.qty,
+          unit_pln: u.unit_pln,
+          total_pln: u.total_pln,
+          raw_desc: u.raw_desc,
+        });
       }
-      // TODO: apply r.mappings to k.lines, re-run mapping. For now just continue.
+      k.unmapped_lines = [];
     }
 
     ev.onProgress({
@@ -258,18 +264,24 @@ export async function scanInvoice(
     const hmrc = await getRate(chosenHmrcMonth, 'PLN');
     ev.onProgress({ id: fileId, progress: 60, hmrc_rate: hmrc.rate });
 
-    // 4. Build payloads — validates that every vendor/customer/item/account/
-    // tax code resolves in BOTH realms before we let the user upload. Any
-    // failure here surfaces as a scan error instead of a surprise at upload.
-    const pro = await qboClient.getClient('pro');
-    const store = await qboClient.getClient('store');
-    await qboPayloads.buildKreiselBill(pro, k, hmrc.rate);
-    const inv = await qboPayloads.buildEwiproInvoice(pro, k, hmrc.rate);
-    await qboPayloads.buildEwistoreBillFromInvoice(store, k, inv.payload, hmrc.rate);
-    const subGbp = inv.payload.Line.reduce((s: number, l: { Amount: number }) => s + l.Amount, 0);
-
-    // Build parsed_lines for sidebar display with computed GBP amounts
-    const parsedLines = buildParsedLines(k, inv.payload.Line as InvLine[]);
+    // 4. Cost the lines with the SAME math the QBO Invoice build uses — but
+    // locally, with no QBO round-trip and no item resolution. That happens at
+    // upload. This keeps scan fast and tolerant of lines whose SKU isn't filled
+    // in yet (the user fixes those in the editor).
+    const sale = buildSaleLines({ lines: k.lines }, hmrc.rate);
+    const subGbp = roundHalfUp(sale.reduce((s, l) => s + l.amount_gbp, 0), 2);
+    const parsedLines = k.lines.map((l, idx) => ({
+      ewi_sku: l.ewi_sku,
+      qty: l.qty_kreisel,
+      unit_pln: l.unit_pln,
+      total_pln: l.total_pln,
+      rate_gbp: sale[idx]?.rate_gbp,
+      amount_gbp: sale[idx]?.amount_gbp,
+      raw_desc: l.raw_desc,
+      is_pallet: l.is_pallet,
+      is_sample: l.is_sample,
+      is_pigment: l.is_pigment,
+    }));
 
     // SKAN done — store the editable draft and park in 'ready'. Upload will
     // re-derive the documents from this draft (after any edits).
@@ -296,29 +308,6 @@ export async function scanInvoice(
   }
 }
 
-type InvLine = { Amount?: number; SalesItemLineDetail?: { Qty?: number; UnitPrice?: number } };
-
-/** Display lines for the sidebar, pairing Kreisel PLN inputs with the GBP
- *  amounts QBO will see (taken from the built Invoice payload). */
-function buildParsedLines(k: ParsedKreisel, invLines: InvLine[]) {
-  return k.lines.map((l, idx) => {
-    const invLine = invLines[idx];
-    const det = invLine?.SalesItemLineDetail;
-    return {
-      ewi_sku: l.ewi_sku,
-      qty: l.qty_kreisel,
-      unit_pln: l.unit_pln,
-      total_pln: l.total_pln,
-      rate_gbp: det?.UnitPrice,
-      amount_gbp: invLine?.Amount,
-      raw_desc: l.raw_desc,
-      is_pallet: l.is_pallet,
-      is_sample: l.is_sample,
-      is_pigment: l.is_pigment,
-    };
-  });
-}
-
 /**
  * UPLOAD phase — re-derive the 3 QBO documents from the (possibly edited)
  * scan draft and post them. Preserves the Bill1 → Invoice → Bill2 ordering
@@ -336,6 +325,14 @@ export async function uploadInvoice(
   try {
     const k = draft.k as unknown as ParsedKreisel;
     const rate = draft.hmrc_rate;
+
+    // Friendly guard: a line with no SKU can't post (QBO needs a real product).
+    // Tell the user plainly to fill it in the editor instead of letting the QBO
+    // item lookup throw a cryptic "Item not found: ".
+    const blank = k.lines.filter(l => !l.ewi_sku || !String(l.ewi_sku).trim());
+    if (blank.length) {
+      throw new Error(`Uzupełnij kod produktu (SKU) dla ${blank.length} ${blank.length === 1 ? 'linii' : 'linii'} w edytorze przed uploadem.`);
+    }
 
     ev.onProgress({ id: fileId, status: 'processing', progress: 40 });
 

@@ -11,6 +11,7 @@ interface EditLine {
   ewi_sku: string;
   qty: string;        // kept as strings while editing
   total_pln: string;
+  raw_desc?: string;  // original Kreisel description (shown when SKU is blank)
   is_pallet?: boolean;
   is_sample?: boolean;
   is_pigment?: boolean;
@@ -41,6 +42,7 @@ export function DraftEditor({ invoice }: Props) {
         ewi_sku: l.ewi_sku,
         qty: String(l.qty_ewi ?? l.qty_kreisel ?? 0),
         total_pln: String(l.total_pln ?? 0),
+        raw_desc: l.raw_desc,
         is_pallet: l.is_pallet,
         is_sample: l.is_sample,
         is_pigment: l.is_pigment,
@@ -89,6 +91,7 @@ export function DraftEditor({ invoice }: Props) {
           ewi_sku: l.ewi_sku.trim(),
           qty: parseFloat(l.qty.replace(',', '.')) || 0,
           total_pln: parseFloat(l.total_pln.replace(',', '.')) || 0,
+          raw_desc: l.raw_desc,
           is_pallet: l.is_pallet,
           is_sample: l.is_sample,
           is_pigment: l.is_pigment,
@@ -179,10 +182,17 @@ export function DraftEditor({ invoice }: Props) {
                         <input
                           value={l.ewi_sku}
                           onChange={e => setLine(idx, { ewi_sku: e.target.value })}
-                          className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded font-mono text-slate-100 focus:border-blue-500 outline-none"
-                          placeholder="EWI-225"
+                          className={`w-full px-2 py-1 bg-slate-900 border rounded font-mono text-slate-100 outline-none ${
+                            l.ewi_sku.trim() ? 'border-slate-700 focus:border-blue-500' : 'border-amber-600 focus:border-amber-400'
+                          }`}
+                          placeholder="wpisz SKU (np. EWI-225)"
                         />
                       </div>
+                      {l.raw_desc && (!l.ewi_sku.trim() || l.raw_desc.trim().toUpperCase() !== l.ewi_sku.trim().toUpperCase()) && (
+                        <div className="text-[10px] text-slate-500 mt-0.5 pl-1 truncate max-w-[220px]" title={l.raw_desc}>
+                          {l.ewi_sku.trim() ? '' : '⚠ '}{l.raw_desc}
+                        </div>
+                      )}
                     </td>
                     <td className="px-2">
                       <input

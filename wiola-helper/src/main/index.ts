@@ -245,10 +245,6 @@ ipcMain.handle('queue:scanAll', async () => {
   for (const inv of sorted) {
     await scanInvoice(inv.id, inv.file, {
       onProgress: (patch) => queue.update(patch as Partial<InvoiceState>),
-      onUnknownSku: ({ fileId, unmapped }) => new Promise(resolve => {
-        pendingUnknownSku.set(fileId, resolve);
-        mainWindow?.webContents.send('modal:unknownSku', { fileId, unmapped });
-      }),
       onConfirmTransport: ({ fileId }) => new Promise(resolve => {
         pendingConfirmTransport.set(fileId, resolve);
       }),
@@ -323,7 +319,7 @@ ipcMain.handle('queue:uploadAll', async (_, post: boolean) => {
 // Apply user edits to a scanned draft and recompute GBP via the build math.
 ipcMain.handle('queue:editDraft', async (_, id: string, edits: {
   hmrc_rate?: number;
-  lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }>;
+  lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; raw_desc?: string; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }>;
 }) => {
   const inv = queue.get(id);
   if (!inv?.scan) return queue.state();
@@ -347,7 +343,9 @@ ipcMain.handle('queue:editDraft', async (_, id: string, edits: {
           // so the preview, the saved recompute, and the upload all agree to the penny.
           unit_pln: qty ? total_pln / qty : 0,
           total_pln,
-          raw_desc: l.ewi_sku.trim(),
+          // Preserve the original Kreisel description (informational); fall back
+          // to the SKU if none was carried.
+          raw_desc: (l.raw_desc && l.raw_desc.trim()) || l.ewi_sku.trim(),
           is_pallet: !!l.is_pallet,
           is_sample: !!l.is_sample,
           is_pigment: !!l.is_pigment,

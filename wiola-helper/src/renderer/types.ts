@@ -67,6 +67,7 @@ export interface Invoice {
         qty_ewi: number;
         unit_pln: number;
         total_pln: number;
+        raw_desc?: string;
         is_pallet?: boolean;
         is_sample?: boolean;
         is_pigment?: boolean;

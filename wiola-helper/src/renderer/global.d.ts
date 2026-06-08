@@ -47,7 +47,7 @@ interface WiolaApi {
   uploadAll: (post: boolean) => Promise<{ processed: number; halted?: boolean; haltedAt?: string }>;
   editDraft: (
     id: string,
-    edits: { hmrc_rate?: number; lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }> },
+    edits: { hmrc_rate?: number; lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; raw_desc?: string; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }> },
   ) => Promise<unknown>;
 
   respondToUnknownSku: (fileId: string, resp: { skip: boolean; mappings?: Record<string, string> }) => Promise<void>;

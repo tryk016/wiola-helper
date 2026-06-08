@@ -40,7 +40,7 @@ const api = {
   uploadAll: (post: boolean) => ipcRenderer.invoke('queue:uploadAll', post),
   editDraft: (
     id: string,
-    edits: { hmrc_rate?: number; lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }> },
+    edits: { hmrc_rate?: number; lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; raw_desc?: string; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }> },
   ) => ipcRenderer.invoke('queue:editDraft', id, edits),
 
   // Unknown SKU dialog response
