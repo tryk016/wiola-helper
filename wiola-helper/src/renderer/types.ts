@@ -8,7 +8,8 @@ export type InvoiceStatus =
   | 'unknown_sku'
   | 'delay'
   | 'missing_transport'
-  | 'awaiting_transport_confirm';
+  | 'awaiting_transport_confirm'
+  | 'ready';
 
 export interface ParsedLine {
   ewi_sku: string;
@@ -57,6 +58,26 @@ export interface Invoice {
     delivery_date?: string | null;
     invoice_date?: string | null;
   };
+  // Editable draft (status 'ready'); upload re-derives the 3 docs from it.
+  scan?: {
+    k: {
+      lines: Array<{
+        ewi_sku: string;
+        qty_kreisel: number;
+        qty_ewi: number;
+        unit_pln: number;
+        total_pln: number;
+        is_pallet?: boolean;
+        is_sample?: boolean;
+        is_pigment?: boolean;
+      }>;
+      [key: string]: unknown;
+    };
+    hmrc_rate: number;
+    hmrc_month: string;
+    edited?: boolean;
+  };
+  ewipro_pdf_path?: string;
 }
 
 export interface Health {

@@ -9,7 +9,39 @@ import { app } from 'electron';
 export type InvoiceStatus =
   | 'waiting' | 'parsing' | 'processing' | 'done' | 'failed'
   | 'ambiguous' | 'unknown_sku' | 'delay' | 'missing_transport'
-  | 'awaiting_transport_confirm';
+  | 'awaiting_transport_confirm'
+  // Scanned & costed, payloads validated — waiting for the user to review/edit
+  // and click Upload. This is the gate between the Skan and Upload phases.
+  | 'ready';
+
+// Editable draft captured during the Skan phase. All three QBO documents are
+// re-derived from k.lines (PLN) + hmrc_rate at upload time, so editing these
+// inputs is enough to change everything consistently.
+export interface ScanDraft {
+  k: {
+    invoice_no: string;
+    kreisel_ref?: string;
+    issue_date: string;
+    sale_date?: string;
+    container: string | null;
+    lines: Array<{
+      ewi_sku: string;
+      qty_kreisel: number;
+      qty_ewi: number;
+      unit_pln: number;
+      total_pln: number;
+      raw_desc?: string;
+      is_pallet?: boolean;
+      is_sample?: boolean;
+      is_pigment?: boolean;
+    }>;
+    total_pln: number;
+    [key: string]: unknown;   // _meta, warnings, pkwiu etc. carried through verbatim
+  };
+  hmrc_rate: number;
+  hmrc_month: string;
+  edited?: boolean;   // true once the user changed anything
+}
 
 export interface ParsedLine {
   ewi_sku: string;
@@ -84,6 +116,11 @@ export interface InvoiceState {
     delivery_date?: string | null;
     invoice_date?: string | null;
   };
+  // Editable draft produced by the Skan phase (status 'ready'). Upload
+  // re-derives the 3 QBO docs from this.
+  scan?: ScanDraft;
+  // Where the EWI Pro Invoice PDF was archived on disk after a successful upload.
+  ewipro_pdf_path?: string;
 }
 
 const STATE_DIR = path.join(app.getPath('userData'), 'state');
@@ -140,7 +177,10 @@ export class InvoiceQueue extends EventEmitter {
       }
       // Delay state is in-memory only; on restart, drop it and put item back as 'waiting'
       if (inv.status === 'delay') {
-        inv.status = 'waiting';
+        // A delay only ever happens during upload, where the item already had a
+        // validated draft — restore it to 'ready' so the user just re-clicks
+        // Upload (no need to re-scan). Fall back to 'waiting' if no draft.
+        inv.status = inv.scan ? 'ready' : 'waiting';
         delete inv.delay_until;
         delete inv.delay_from;
         delete inv.progress;
@@ -261,6 +301,11 @@ export class InvoiceQueue extends EventEmitter {
     return added;
   }
 
+  // Read a live invoice object (queue or pending) for in-place edits.
+  get(id: string): InvoiceState | undefined {
+    return this.queue.find(q => q.id === id) || this.pending.find(p => p.id === id);
+  }
+
   update(patch: Partial<InvoiceState>) {
     if (!patch.id) return;
     let inv = this.queue.find(q => q.id === patch.id);
@@ -367,10 +412,12 @@ export class InvoiceQueue extends EventEmitter {
     }
     if (!inv) return;
 
-    const retryable: InvoiceStatus[] = ['failed', 'ambiguous', 'unknown_sku'];
+    const retryable: InvoiceStatus[] = ['failed', 'ambiguous', 'unknown_sku', 'missing_transport'];
     if (!retryable.includes(inv.status)) return;
 
-    inv.status = 'waiting';
+    // If a validated scan draft already exists, retry means "upload again" →
+    // go back to 'ready' (skip re-scanning). Otherwise re-scan from 'waiting'.
+    inv.status = inv.scan ? 'ready' : 'waiting';
     delete inv.error;
     delete inv.progress;
 

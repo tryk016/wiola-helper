@@ -1,4 +1,7 @@
-// Pipeline runner: PDF → parse → resolve → math → optionally post to QBO.
+// Pipeline runner, split into two phases:
+//   • scanInvoice  — PDF → parse → resolve → math → build (validate) → status 'ready'
+//   • uploadInvoice — rebuild from the (possibly edited) draft → POST to QBO →
+//                     attach PDFs → archive EWI Pro Invoice PDF to disk → done
 // Emits granular progress events for the renderer.
 
 import {
@@ -9,7 +12,29 @@ import {
   qboClient,
   qboPayloads,
 } from './system-modules';
-import type { InvoiceState } from './queue';
+import type { InvoiceState, ScanDraft } from './queue';
+
+// Where uploaded EWI Pro Invoice PDFs are archived, split into per-day folders.
+const EWIPRO_ARCHIVE_ROOT = 'C:\\kreisel\\ewi pro';
+
+// Pull the human-useful detail out of a QBO axios error (400/401/422).
+function extractError(e: unknown): string {
+  let message = e instanceof Error ? e.message : String(e);
+  const err = e as { response?: { status?: number; data?: unknown } };
+  if (err.response?.data) {
+    const data = err.response.data;
+    const fault = (data as { Fault?: { Error?: Array<{ Message?: string; Detail?: string; code?: string; element?: string }> } }).Fault;
+    if (fault?.Error?.length) {
+      const details = fault.Error.map(x =>
+        `[${x.code || '?'}] ${x.Message || ''}${x.Detail ? `\n      ${x.Detail}` : ''}${x.element ? ` (in: ${x.element})` : ''}`
+      ).join('\n');
+      message = `QBO ${err.response.status}:\n${details}`;
+    } else {
+      message = `${message}\n${JSON.stringify(data, null, 2).slice(0, 500)}`;
+    }
+  }
+  return message;
+}
 
 interface PipelineEvents {
   onProgress: (patch: Partial<InvoiceState>) => void;
@@ -90,15 +115,16 @@ type ResolverResult = {
 };
 
 /**
- * Run the full pipeline for a single PDF.
+ * SKAN phase — parse, resolve the HMRC month, cost the lines, and build (i.e.
+ * validate) all three QBO payloads WITHOUT posting. On success the invoice
+ * lands in status 'ready' with an editable `scan` draft. Interactive gates
+ * (unknown SKU, confirm-transport, ambiguous month) still happen here.
  * @param pdfPath  absolute path to Kreisel PDF
- * @param post     true = actually POST to QBO, false = dry-run
  * @param ev       event emitter for renderer updates
  */
-export async function runPipeline(
+export async function scanInvoice(
   fileId: string,
   pdfPath: string,
-  post: boolean,
   ev: PipelineEvents,
   options: PipelineOptions = {}
 ): Promise<void> {
@@ -232,40 +258,99 @@ export async function runPipeline(
     const hmrc = await getRate(chosenHmrcMonth, 'PLN');
     ev.onProgress({ id: fileId, progress: 60, hmrc_rate: hmrc.rate });
 
-    // 4. Build payloads
+    // 4. Build payloads — validates that every vendor/customer/item/account/
+    // tax code resolves in BOTH realms before we let the user upload. Any
+    // failure here surfaces as a scan error instead of a surprise at upload.
     const pro = await qboClient.getClient('pro');
     const store = await qboClient.getClient('store');
-    const bill1 = await qboPayloads.buildKreiselBill(pro, k, hmrc.rate);
+    await qboPayloads.buildKreiselBill(pro, k, hmrc.rate);
     const inv = await qboPayloads.buildEwiproInvoice(pro, k, hmrc.rate);
-    const bill2 = await qboPayloads.buildEwistoreBillFromInvoice(store, k, inv.payload, hmrc.rate);
+    await qboPayloads.buildEwistoreBillFromInvoice(store, k, inv.payload, hmrc.rate);
     const subGbp = inv.payload.Line.reduce((s: number, l: { Amount: number }) => s + l.Amount, 0);
 
     // Build parsed_lines for sidebar display with computed GBP amounts
-    const parsedLines = k.lines.map((l, idx) => {
-      const invLine = inv.payload.Line[idx] as { Amount?: number; SalesItemLineDetail?: { Qty?: number; UnitPrice?: number } } | undefined;
-      const det = invLine?.SalesItemLineDetail;
-      return {
-        ewi_sku: l.ewi_sku,
-        qty: l.qty_kreisel,
-        unit_pln: l.unit_pln,
-        total_pln: l.total_pln,
-        rate_gbp: det?.UnitPrice,
-        amount_gbp: invLine?.Amount,
-        raw_desc: l.raw_desc,
-        is_pallet: l.is_pallet,
-        is_sample: l.is_sample,
-        is_pigment: l.is_pigment,
-      };
-    });
+    const parsedLines = buildParsedLines(k, inv.payload.Line as InvLine[]);
 
-    ev.onProgress({ id: fileId, progress: 80, amount_gbp: subGbp, parsed_lines: parsedLines });
+    // SKAN done — store the editable draft and park in 'ready'. Upload will
+    // re-derive the documents from this draft (after any edits).
+    ev.onProgress({
+      id: fileId,
+      status: 'ready',
+      progress: 100,
+      hmrc_rate: hmrc.rate,
+      hmrc_month: chosenHmrcMonth,
+      amount_pln: k.total_pln,
+      amount_gbp: subGbp,
+      parsed_lines: parsedLines,
+      container: k.container ?? undefined,
+      scan: {
+        k: k as unknown as ScanDraft['k'],
+        hmrc_rate: hmrc.rate,
+        hmrc_month: chosenHmrcMonth,
+      },
+    });
+  } catch (e) {
+    const message = extractError(e);
+    console.error('Scan error for', fileId, ':', message);
+    ev.onProgress({ id: fileId, status: 'failed', error: message });
+  }
+}
+
+type InvLine = { Amount?: number; SalesItemLineDetail?: { Qty?: number; UnitPrice?: number } };
+
+/** Display lines for the sidebar, pairing Kreisel PLN inputs with the GBP
+ *  amounts QBO will see (taken from the built Invoice payload). */
+function buildParsedLines(k: ParsedKreisel, invLines: InvLine[]) {
+  return k.lines.map((l, idx) => {
+    const invLine = invLines[idx];
+    const det = invLine?.SalesItemLineDetail;
+    return {
+      ewi_sku: l.ewi_sku,
+      qty: l.qty_kreisel,
+      unit_pln: l.unit_pln,
+      total_pln: l.total_pln,
+      rate_gbp: det?.UnitPrice,
+      amount_gbp: invLine?.Amount,
+      raw_desc: l.raw_desc,
+      is_pallet: l.is_pallet,
+      is_sample: l.is_sample,
+      is_pigment: l.is_pigment,
+    };
+  });
+}
+
+/**
+ * UPLOAD phase — re-derive the 3 QBO documents from the (possibly edited)
+ * scan draft and post them. Preserves the Bill1 → Invoice → Bill2 ordering
+ * and the DocNumber correlation. Archives the EWI Pro Invoice PDF to disk.
+ * @param post  default true; pass false for a dry-run rebuild (no POST, no archive)
+ */
+export async function uploadInvoice(
+  fileId: string,
+  pdfPath: string,
+  draft: ScanDraft,
+  ev: { onProgress: (patch: Partial<InvoiceState>) => void },
+  opts: { post?: boolean } = {}
+): Promise<void> {
+  const post = opts.post !== false;
+  try {
+    const k = draft.k as unknown as ParsedKreisel;
+    const rate = draft.hmrc_rate;
+
+    ev.onProgress({ id: fileId, status: 'processing', progress: 40 });
+
+    const pro = await qboClient.getClient('pro');
+    const store = await qboClient.getClient('store');
+    const bill1 = await qboPayloads.buildKreiselBill(pro, k, rate);
+    const inv = await qboPayloads.buildEwiproInvoice(pro, k, rate);
+    const bill2 = await qboPayloads.buildEwistoreBillFromInvoice(store, k, inv.payload, rate);
 
     if (!post) {
       ev.onProgress({ id: fileId, status: 'done', progress: 100, dry_run: true });
       return;
     }
 
-    // 5. POST to QBO
+    // POST in order: Pro Bill → Pro Invoice → Store Bill (DocNumber = Invoice no)
     const billRes1 = await pro.post('bill', bill1.payload);
     const proBillId = billRes1.Bill.Id;
     const invRes = await pro.post('invoice', inv.payload);
@@ -275,42 +360,52 @@ export async function runPipeline(
     const billRes2 = await store.post('bill', bill2.payload);
     const storeBillId = billRes2.Bill.Id;
 
-    ev.onProgress({ id: fileId, progress: 95, invoice_no: invDoc, pro_bill_id: proBillId, store_bill_id: storeBillId });
+    ev.onProgress({ id: fileId, progress: 90, invoice_no: invDoc, pro_bill_id: proBillId, store_bill_id: storeBillId });
 
-    // 6. Attachments
+    // EWI Pro Invoice PDF — fetch once, reuse for both the attachment and the
+    // on-disk archive so a failure in one doesn't block the other.
+    const invFileName = `EWI-Pro-Invoice-${invDoc}.pdf`;
+    let invPdf: Buffer | undefined;
     try {
-      // Kreisel PDF → renamed to "FSE-<nr>-<yr>.pdf" to match colleague's manual naming style
+      invPdf = await pro.getPdf(`invoice/${invId}/pdf`);
+    } catch (e) {
+      console.error('EWI Pro Invoice PDF fetch failed:', e);
+    }
+
+    // Attachments
+    try {
       const fs = await import('node:fs');
       const kreiselBytes = fs.readFileSync(pdfPath);
       const kreiselFileName = (k.kreisel_ref || `FSE-${k.invoice_no}`).replace(/\//g, '-') + '.pdf';
       await qboPayloads.attachPdfBufferToTxn(pro, kreiselBytes, kreiselFileName, 'Bill', proBillId);
-
-      // EWI Pro Invoice PDF (from QBO) → attached to Store Bill
-      const invPdf = await pro.getPdf(`invoice/${invId}/pdf`);
-      const invFileName = `EWI-Pro-Invoice-${invDoc}.pdf`;
-      await qboPayloads.attachPdfBufferToTxn(store, invPdf, invFileName, 'Bill', storeBillId);
+      if (invPdf) {
+        await qboPayloads.attachPdfBufferToTxn(store, invPdf, invFileName, 'Bill', storeBillId);
+      }
     } catch (e) {
       console.error('Attachment failed:', e);
     }
 
-    ev.onProgress({ id: fileId, status: 'done', progress: 100 });
-  } catch (e) {
-    // Extract detailed error from axios responses (QBO 400/401/422)
-    let message = e instanceof Error ? e.message : String(e);
-    const err = e as { response?: { status?: number; data?: unknown } };
-    if (err.response?.data) {
-      const data = err.response.data;
-      const fault = (data as { Fault?: { Error?: Array<{ Message?: string; Detail?: string; code?: string; element?: string }> } }).Fault;
-      if (fault?.Error?.length) {
-        const details = fault.Error.map(e =>
-          `[${e.code || '?'}] ${e.Message || ''}${e.Detail ? `\n      ${e.Detail}` : ''}${e.element ? ` (in: ${e.element})` : ''}`
-        ).join('\n');
-        message = `QBO ${err.response.status}:\n${details}`;
-      } else {
-        message = `${message}\n${JSON.stringify(data, null, 2).slice(0, 500)}`;
+    // Archive EWI Pro Invoice PDF → C:\kreisel\ewi pro\YYYY-MM-DD\
+    if (invPdf) {
+      try {
+        const fs = await import('node:fs');
+        const pathMod = await import('node:path');
+        const day = new Date().toISOString().slice(0, 10); // upload date
+        const dir = pathMod.join(EWIPRO_ARCHIVE_ROOT, day);
+        fs.mkdirSync(dir, { recursive: true });
+        const outPath = pathMod.join(dir, invFileName);
+        fs.writeFileSync(outPath, invPdf);
+        ev.onProgress({ id: fileId, ewipro_pdf_path: outPath });
+        console.log('[archive] EWI Pro Invoice →', outPath);
+      } catch (e) {
+        console.error('EWI Pro archive failed:', e);
       }
     }
-    console.error('Pipeline error for', fileId, ':', message);
+
+    ev.onProgress({ id: fileId, status: 'done', progress: 100 });
+  } catch (e) {
+    const message = extractError(e);
+    console.error('Upload error for', fileId, ':', message);
     ev.onProgress({ id: fileId, status: 'failed', error: message });
   }
 }

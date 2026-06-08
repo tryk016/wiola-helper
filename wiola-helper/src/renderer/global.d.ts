@@ -43,7 +43,12 @@ interface WiolaApi {
     error?: string;
   }>;
   getQueue: () => Promise<unknown>;
-  processAll: (post: boolean) => Promise<{ processed: number }>;
+  scanAll: () => Promise<{ scanned: number }>;
+  uploadAll: (post: boolean) => Promise<{ processed: number; halted?: boolean; haltedAt?: string }>;
+  editDraft: (
+    id: string,
+    edits: { hmrc_rate?: number; lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }> },
+  ) => Promise<unknown>;
 
   respondToUnknownSku: (fileId: string, resp: { skip: boolean; mappings?: Record<string, string> }) => Promise<void>;
   pendingRecheck: () => Promise<{ found: number }>;

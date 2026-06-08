@@ -36,7 +36,12 @@ const api = {
 
   qboLogin: (role: 'pro' | 'store') => ipcRenderer.invoke('qbo:oauthLogin', role),
   getQueue: () => ipcRenderer.invoke('queue:state'),
-  processAll: (post: boolean) => ipcRenderer.invoke('queue:processAll', post),
+  scanAll: () => ipcRenderer.invoke('queue:scanAll'),
+  uploadAll: (post: boolean) => ipcRenderer.invoke('queue:uploadAll', post),
+  editDraft: (
+    id: string,
+    edits: { hmrc_rate?: number; lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }> },
+  ) => ipcRenderer.invoke('queue:editDraft', id, edits),
 
   // Unknown SKU dialog response
   respondToUnknownSku: (fileId: string, resp: { skip: boolean; mappings?: Record<string, string> }) =>

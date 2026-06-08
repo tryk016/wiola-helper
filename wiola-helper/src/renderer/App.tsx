@@ -4,6 +4,7 @@ import { Queue } from './components/Queue';
 import { Pending } from './components/Pending';
 import { StatusBar } from './components/StatusBar';
 import { Sidebar } from './components/Sidebar';
+import { DraftEditor } from './components/DraftEditor';
 import { UnknownSkuModal } from './components/UnknownSkuModal';
 import { PendingResolvedModal } from './components/PendingResolvedModal';
 import { DuplicatesModal } from './components/DuplicatesModal';
@@ -90,9 +91,14 @@ export function App() {
     if (files?.length) await window.wiola.enqueue(files);
   };
 
-  const handleProcessAll = async () => {
-    // POST to QBO sandbox (use false for dry-run)
-    await window.wiola.processAll(true);
+  const handleScanAll = async () => {
+    // Phase 1: parse + resolve + cost everything, no posting.
+    await window.wiola.scanAll();
+  };
+
+  const handleUploadAll = async () => {
+    // Phase 2: post the scanned (and possibly edited) drafts to QBO.
+    await window.wiola.uploadAll(true);
   };
 
   const stats = {
@@ -100,6 +106,7 @@ export function App() {
     processing: store.queue.filter(q => ['parsing', 'processing'].includes(q.status)).length,
     done: store.queue.filter(q => q.status === 'done').length,
     failed: store.queue.filter(q => q.status === 'failed').length,
+    ready: store.queue.filter(q => q.status === 'ready').length,
   };
 
   const selectedInvoice =
@@ -126,7 +133,8 @@ export function App() {
           <Queue
             invoices={store.queue}
             stats={stats}
-            onProcessAll={handleProcessAll}
+            onScanAll={handleScanAll}
+            onUploadAll={handleUploadAll}
             onSelect={(inv) => {
               store.select(inv.id);
               if (inv.status === 'missing_transport') setMissingTransportFor(inv);
@@ -145,7 +153,9 @@ export function App() {
         </section>
 
         <section className="flex-1 overflow-y-auto bg-slate-950">
-          <Sidebar invoice={selectedInvoice} />
+          {selectedInvoice?.status === 'ready' && selectedInvoice.scan
+            ? <DraftEditor invoice={selectedInvoice} />
+            : <Sidebar invoice={selectedInvoice} />}
         </section>
       </main>
 
@@ -194,7 +204,7 @@ export function App() {
           items={store.pendingResolvedModal}
           onClose={() => store.closePendingResolved()}
           onAcceptAll={async () => {
-            await window.wiola.processAll(true);
+            await window.wiola.scanAll();
           }}
         />
       )}

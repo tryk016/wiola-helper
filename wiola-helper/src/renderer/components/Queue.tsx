@@ -3,8 +3,9 @@ import type { Invoice } from '../types';
 
 interface Props {
   invoices: Invoice[];
-  stats: { waiting: number; processing: number; done: number; failed: number };
-  onProcessAll: () => void;
+  stats: { waiting: number; processing: number; done: number; failed: number; ready: number };
+  onScanAll: () => void;
+  onUploadAll: () => void;
   onSelect: (i: Invoice) => void;
   onClearDone?: () => void;
   onClearFailed?: () => void;
@@ -25,6 +26,7 @@ const statusBadge = (status: Invoice['status']) => {
     delay: { icon: '⏱', color: 'text-purple-300', label: 'Czekam (anti-bot)' },
     missing_transport: { icon: '🚛', color: 'text-orange-400', label: 'Brak danych transportu — klik' },
     awaiting_transport_confirm: { icon: '🚛', color: 'text-blue-300', label: 'Potwierdź transport — klik' },
+    ready: { icon: '📝', color: 'text-cyan-300', label: 'Gotowe — sprawdź/edytuj i upload' },
   };
   return map[status] || map.waiting;
 };
@@ -66,9 +68,10 @@ function CountdownBadge({ until, from, onSkip }: { until: number; from?: number;
   );
 }
 
-export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, onClearFailed, onRemove, onRetry, selectedId }: Props) {
+export function Queue({ invoices, stats, onScanAll, onUploadAll, onSelect, onClearDone, onClearFailed, onRemove, onRetry, selectedId }: Props) {
   const hasItems = invoices.length > 0;
-  const canProcess = stats.waiting > 0;
+  const canScan = stats.waiting > 0;
+  const canUpload = stats.ready > 0;
 
   return (
     <div className="px-6 pb-2">
@@ -97,17 +100,32 @@ export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, on
             </button>
           )}
           <button
-            onClick={onProcessAll}
-            disabled={!canProcess}
+            onClick={onScanAll}
+            disabled={!canScan}
             className={`
               px-4 py-1.5 rounded-md text-sm font-medium transition-all
-              ${canProcess
+              ${canScan
+                ? 'bg-ewi-blue hover:bg-blue-700 text-white shadow-md'
+                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+              }
+            `}
+            title="Skanuje wszystkie faktury (pozycje, daty, kurs) — bez wysyłki do QuickBooks"
+          >
+            🔍 Skanuj ({stats.waiting})
+          </button>
+          <button
+            onClick={onUploadAll}
+            disabled={!canUpload}
+            className={`
+              px-4 py-1.5 rounded-md text-sm font-medium transition-all
+              ${canUpload
                 ? 'bg-ewi-green hover:bg-ewi-green-700 text-white shadow-md'
                 : 'bg-slate-800 text-slate-500 cursor-not-allowed'
               }
             `}
+            title="Wysyła zeskanowane (i ewentualnie poprawione) faktury do QuickBooks"
           >
-            ✓ Wyślij wszystkie ({stats.waiting})
+            ⬆ Upload do QuickBooks ({stats.ready})
           </button>
         </div>
       </div>
@@ -117,7 +135,7 @@ export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, on
           {invoices.map(inv => {
             const badge = statusBadge(inv.status);
             const isSelected = inv.id === selectedId;
-            const removable = ['failed', 'done', 'waiting', 'unknown_sku'].includes(inv.status);
+            const removable = ['failed', 'done', 'waiting', 'unknown_sku', 'ready'].includes(inv.status);
             const retryable = ['failed', 'ambiguous', 'unknown_sku', 'missing_transport'].includes(inv.status);
             return (
               <div

@@ -72,4 +72,13 @@ export const qboClient = require(`${SYSTEM_PATH}/qbo_client.js`);
 export const qboPayloads = require(`${SYSTEM_PATH}/qbo_payloads.js`);
 export const magemarLookup = require(`${SYSTEM_PATH}/magemar_lookup.js`);
 
+// PLN→GBP line math (same formulas the QBO Invoice build uses) — for live
+// recompute of an edited draft without hitting QBO.
+const _math = require(`${SYSTEM_PATH}/math.js`);
+export const buildSaleLines = _math.buildSaleLines as (
+  input: { lines: Array<{ ewi_sku: string; qty_kreisel: number; qty_ewi: number; unit_pln: number; total_pln: number; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }> },
+  hmrcRate: number,
+) => Array<{ ewi_sku: string; qty: number; rate_gbp: number; amount_gbp: number; total_pln_line: number; is_pigment: boolean; is_sample: boolean }>;
+export const roundHalfUp = _math.roundHalfUp as (n: number, dp: number) => number;
+
 export const systemPath = SYSTEM_PATH;

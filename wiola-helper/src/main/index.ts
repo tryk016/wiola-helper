@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { InvoiceQueue, type InvoiceState } from './queue';
-import { runPipeline } from './pipeline';
+import { scanInvoice, uploadInvoice } from './pipeline';
 import { qboClient, magemarLookup } from './system-modules';
 import { maskedEnv, writeEnv, readPrefs, writePrefs, type EnvVars, type AppPrefs } from './settings';
 import { startOauthFlow } from './qbo-oauth';
@@ -202,17 +202,23 @@ ipcMain.handle('history:clear', () => {
 
 ipcMain.handle('queue:state', () => queue.state());
 
-ipcMain.handle('queue:processAll', async (_, post: boolean) => {
-  // Phase 1: discover (parse just enough to get kreisel_ref) — for those without it yet
-  const waiting = queue.state().queue.filter(q => q.status === 'waiting');
-  if (!waiting.length) return { processed: 0 };
+// Sort by Kreisel invoice number ASCENDING. Extracts "201" from "FSE-201/2026/EXP".
+const sortKey = (ref: string): number => {
+  const m = /FSE-?(\d+)\//i.exec(ref || '');
+  return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+};
 
-  // Quick-parse missing kreisel_refs (just to know sort order).
-  // Step 1: try a cheap text-layer regex (no LLM call); this handles all
-  // text-based PDFs (the new Kreisel format) in ~50ms with zero API cost.
-  // Step 2: fall back to the LLM ONLY for scanned PDFs (no text layer)
-  // where the regex returns null. The full-fidelity LLM parse still runs
-  // inside pipeline.ts for every invoice — we just avoid running it TWICE.
+// ── SKAN phase ──────────────────────────────────────────────────────────────
+// Parse + resolve + cost + validate every waiting invoice WITHOUT posting.
+// Nothing reaches QBO, so there's no numbering risk → no anti-automation delay
+// and no halt-on-failure: each invoice scans independently and lands in 'ready'
+// (or a blocked state the user resolves, then re-scans). Interactive gates
+// (unknown SKU, confirm-transport) still pause inline.
+ipcMain.handle('queue:scanAll', async () => {
+  const waiting = queue.state().queue.filter(q => q.status === 'waiting');
+  if (!waiting.length) return { scanned: 0 };
+
+  // Discovery: cheap regex kreisel_ref for sort/labels; LLM fallback for scans.
   const sysmod = await import('./system-modules');
   for (const inv of waiting) {
     if (inv.kreisel_ref) continue;
@@ -222,7 +228,6 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
       if (ref) {
         queue.update({ id: inv.id, kreisel_ref: ref, status: 'waiting' });
       } else {
-        // Scanned PDF or unusual format — must use LLM to find the ref
         const k = await sysmod.parseKreiselWithLlm(inv.file) as { kreisel_ref?: string; invoice_no: string };
         queue.update({ id: inv.id, kreisel_ref: k.kreisel_ref || `FSE-${k.invoice_no}`, status: 'waiting' });
       }
@@ -232,24 +237,44 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
     }
   }
 
-  // Phase 2: sort by Kreisel invoice number ASCENDING
-  // Extracts "201" from "FSE-201/2026/EXP"
-  const sortKey = (ref: string): number => {
-    const m = /FSE-?(\d+)\//i.exec(ref || '');
-    return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
-  };
-
-  const sorted = queue
-    .state()
-    .queue.filter(q => q.status === 'waiting' && q.kreisel_ref)
+  const sorted = queue.state().queue
+    .filter(q => q.status === 'waiting' && q.kreisel_ref)
     .sort((a, b) => sortKey(a.kreisel_ref!) - sortKey(b.kreisel_ref!));
 
-  // Phase 3: post serially, HALT on any failure to preserve Kreisel/EWI Pro numbering correlation
-  // Between successful posts, insert a random delay (anti-automation pattern).
+  let scanned = 0;
+  for (const inv of sorted) {
+    await scanInvoice(inv.id, inv.file, {
+      onProgress: (patch) => queue.update(patch as Partial<InvoiceState>),
+      onUnknownSku: ({ fileId, unmapped }) => new Promise(resolve => {
+        pendingUnknownSku.set(fileId, resolve);
+        mainWindow?.webContents.send('modal:unknownSku', { fileId, unmapped });
+      }),
+      onConfirmTransport: ({ fileId }) => new Promise(resolve => {
+        pendingConfirmTransport.set(fileId, resolve);
+      }),
+    }, {
+      manualHmrcMonth: inv.manual_hmrc_month,
+      manualContainer: inv.manual_container,
+    });
+    if (queue.get(inv.id)?.status === 'ready') scanned++;
+  }
+  return { scanned };
+});
+
+// ── UPLOAD phase ─────────────────────────────────────────────────────────────
+// Post every 'ready' invoice (re-deriving the 3 docs from its possibly-edited
+// draft). Serial, HALT on any failure to preserve Kreisel/EWI Pro numbering,
+// with the random anti-automation delay between successful posts.
+ipcMain.handle('queue:uploadAll', async (_, post: boolean) => {
+  const ready = queue.state().queue.filter(q => q.status === 'ready' && q.scan);
+  if (!ready.length) return { processed: 0 };
+
+  const sorted = ready.sort((a, b) => sortKey(a.kreisel_ref || '') - sortKey(b.kreisel_ref || ''));
+
   const prefs = readPrefs();
   const delayMinMs = Math.max(0, prefs.delayMinMinutes * 60_000);
   const delayMaxMs = Math.max(delayMinMs, prefs.delayMaxMinutes * 60_000);
-  // Dry-run mode skips delays entirely (nothing reaches QBO so audit risk = 0)
+  // Dry-run skips delays entirely (nothing reaches QBO so audit risk = 0).
   const delaysEnabled = post && delayMaxMs > 0;
 
   let processed = 0;
@@ -259,12 +284,11 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
   for (let i = 0; i < sorted.length; i++) {
     const inv = sorted[i];
     if (halted) {
-      queue.update({ id: inv.id, status: 'waiting', error: `Wstrzymane — czeka na ${haltedAt}` });
+      queue.update({ id: inv.id, status: 'ready', error: `Wstrzymane — czeka na ${haltedAt}` });
       continue;
     }
 
-    // Random delay BEFORE each successful post except the very first.
-    // We do it before so the next-up invoice visibly shows "Następna za X min".
+    // Random delay BEFORE each post except the first; item shows the countdown.
     if (delaysEnabled && postsSinceStart > 0) {
       const range = delayMaxMs - delayMinMs;
       const delay = delayMinMs + Math.floor(Math.random() * (range + 1));
@@ -273,40 +297,91 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
       queue.update({ id: inv.id, status: 'delay', delay_until: until, delay_from: from });
       console.log(`[delay] ${inv.kreisel_ref} - czekam ${Math.round(delay/60_000)} min (do ${new Date(until).toLocaleTimeString()})`);
       await sleepWithSkip(inv.id, delay);
-      queue.update({ id: inv.id, status: 'waiting', delay_until: undefined, delay_from: undefined });
+      queue.update({ id: inv.id, status: 'ready', delay_until: undefined, delay_from: undefined });
     }
 
-    await runPipeline(inv.id, inv.file, post, {
+    const draft = queue.get(inv.id)?.scan;
+    if (!draft) { processed++; postsSinceStart++; continue; }
+
+    await uploadInvoice(inv.id, inv.file, draft, {
       onProgress: (patch) => queue.update(patch as Partial<InvoiceState>),
-      onUnknownSku: ({ fileId, unmapped }) => new Promise(resolve => {
-        pendingUnknownSku.set(fileId, resolve);
-        mainWindow?.webContents.send('modal:unknownSku', { fileId, unmapped });
-      }),
-      onConfirmTransport: ({ fileId }) => new Promise(resolve => {
-        pendingConfirmTransport.set(fileId, resolve);
-        // The renderer's auto-open effect picks the invoice up from the
-        // queue:state event triggered by the status='awaiting_transport_confirm'
-        // update emitted just before this promise was created.
-      }),
-    }, {
-      manualHmrcMonth: inv.manual_hmrc_month,
-      manualContainer: inv.manual_container,
-    });
-    const inAfter = queue.state().queue.find(q => q.id === inv.id) || queue.state().pending.find(p => p.id === inv.id);
+    }, { post });
+
+    const inAfter = queue.get(inv.id);
     if (inAfter && ['failed', 'ambiguous', 'unknown_sku', 'missing_transport'].includes(inAfter.status)) {
-      // Note: awaiting_transport_confirm is NOT in this list — the pipeline
-      // awaits the user's response inline and resumes, so by the time we
-      // reach this check the invoice has either advanced (status=done/ambiguous)
-      // or halted (status=failed via decision.halt).
       halted = true;
       haltedAt = inv.kreisel_ref;
-      console.warn(`Halted at ${inv.kreisel_ref} (status=${inAfter.status}); remaining ${sorted.length - processed - 1} held.`);
+      console.warn(`Halted upload at ${inv.kreisel_ref} (status=${inAfter.status}); remaining held.`);
     }
     processed++;
     postsSinceStart++;
   }
 
   return { processed, halted, haltedAt };
+});
+
+// Apply user edits to a scanned draft and recompute GBP via the build math.
+ipcMain.handle('queue:editDraft', async (_, id: string, edits: {
+  hmrc_rate?: number;
+  lines?: Array<{ ewi_sku: string; qty: number; total_pln: number; is_pallet?: boolean; is_sample?: boolean; is_pigment?: boolean }>;
+}) => {
+  const inv = queue.get(id);
+  if (!inv?.scan) return queue.state();
+  const sysmod = await import('./system-modules');
+  const draft = inv.scan;
+
+  if (typeof edits.hmrc_rate === 'number' && edits.hmrc_rate > 0) {
+    draft.hmrc_rate = edits.hmrc_rate;
+  }
+  if (Array.isArray(edits.lines)) {
+    draft.k.lines = edits.lines
+      .filter(l => l.ewi_sku && l.ewi_sku.trim())
+      .map(l => {
+        const qty = Number(l.qty) || 0;
+        const total_pln = Number(l.total_pln) || 0;
+        return {
+          ewi_sku: l.ewi_sku.trim(),
+          qty_kreisel: qty,
+          qty_ewi: qty,
+          // Keep unit unrounded: buildEwiproInvoice divides total_pln/qty directly,
+          // so the preview, the saved recompute, and the upload all agree to the penny.
+          unit_pln: qty ? total_pln / qty : 0,
+          total_pln,
+          raw_desc: l.ewi_sku.trim(),
+          is_pallet: !!l.is_pallet,
+          is_sample: !!l.is_sample,
+          is_pigment: !!l.is_pigment,
+        };
+      });
+    draft.k.total_pln = sysmod.roundHalfUp(draft.k.lines.reduce((s, l) => s + l.total_pln, 0), 2);
+  }
+  draft.edited = true;
+
+  // Recompute display lines + GBP totals with the SAME math the QBO build uses.
+  const sale = sysmod.buildSaleLines({ lines: draft.k.lines }, draft.hmrc_rate);
+  const parsed_lines = draft.k.lines.map((l, idx) => ({
+    ewi_sku: l.ewi_sku,
+    qty: l.qty_kreisel,
+    unit_pln: l.unit_pln,
+    total_pln: l.total_pln,
+    rate_gbp: sale[idx]?.rate_gbp,
+    amount_gbp: sale[idx]?.amount_gbp,
+    raw_desc: l.raw_desc,
+    is_pallet: l.is_pallet,
+    is_sample: l.is_sample,
+    is_pigment: l.is_pigment,
+  }));
+  const amount_gbp = sysmod.roundHalfUp(sale.reduce((s, l) => s + l.amount_gbp, 0), 2);
+
+  queue.update({
+    id,
+    scan: draft,
+    parsed_lines,
+    amount_gbp,
+    amount_pln: draft.k.total_pln,
+    hmrc_rate: draft.hmrc_rate,
+  });
+  return queue.state();
 });
 
 // Skip a delay — user clicked "Wyślij teraz" on a delayed invoice.
