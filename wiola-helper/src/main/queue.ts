@@ -60,6 +60,10 @@ export interface InvoiceState {
   // Timestamp (unix ms) when the random anti-automation delay expires.
   // Renderer counts down to this so the user sees "Następna za 5:23".
   delay_until?: number;
+  // Timestamp (unix ms) when the delay started — lets the renderer draw a
+  // progress bar against the TRUE duration (delays vary 4-10 min), not a
+  // hardcoded 10-min assumption.
+  delay_from?: number;
   // Manual transport override — set when the user resolves a missing_transport
   // block. Either a container number (4 letters + 7 digits → triggers Magemar
   // lookup) or a truck registration (anything else → +3d prediction).
@@ -138,6 +142,7 @@ export class InvoiceQueue extends EventEmitter {
       if (inv.status === 'delay') {
         inv.status = 'waiting';
         delete inv.delay_until;
+        delete inv.delay_from;
         delete inv.progress;
       }
       // missing_transport persists across restarts intentionally so the user

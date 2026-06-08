@@ -44,6 +44,7 @@ export interface Invoice {
   container?: string;
   error?: string;
   delay_until?: number;  // unix ms — when the anti-automation delay ends
+  delay_from?: number;   // unix ms — when the anti-automation delay started
   pending_message?: string;
   suggested_transport?: {
     found: boolean;

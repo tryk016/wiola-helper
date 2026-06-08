@@ -268,11 +268,12 @@ ipcMain.handle('queue:processAll', async (_, post: boolean) => {
     if (delaysEnabled && postsSinceStart > 0) {
       const range = delayMaxMs - delayMinMs;
       const delay = delayMinMs + Math.floor(Math.random() * (range + 1));
-      const until = Date.now() + delay;
-      queue.update({ id: inv.id, status: 'delay', delay_until: until });
+      const from = Date.now();
+      const until = from + delay;
+      queue.update({ id: inv.id, status: 'delay', delay_until: until, delay_from: from });
       console.log(`[delay] ${inv.kreisel_ref} - czekam ${Math.round(delay/60_000)} min (do ${new Date(until).toLocaleTimeString()})`);
       await sleepWithSkip(inv.id, delay);
-      queue.update({ id: inv.id, status: 'waiting', delay_until: undefined });
+      queue.update({ id: inv.id, status: 'waiting', delay_until: undefined, delay_from: undefined });
     }
 
     await runPipeline(inv.id, inv.file, post, {

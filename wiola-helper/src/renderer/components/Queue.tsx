@@ -30,7 +30,9 @@ const statusBadge = (status: Invoice['status']) => {
 };
 
 // Live countdown to a future timestamp. Updates every second.
-function CountdownBadge({ until, onSkip }: { until: number; onSkip: () => void }) {
+// `from` is the delay's start timestamp so the bar reflects the TRUE
+// duration (delays vary 4-10 min), not a hardcoded assumption.
+function CountdownBadge({ until, from, onSkip }: { until: number; from?: number; onSkip: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -39,12 +41,15 @@ function CountdownBadge({ until, onSkip }: { until: number; onSkip: () => void }
   const remaining = Math.max(0, until - now);
   const mins = Math.floor(remaining / 60000);
   const secs = Math.floor((remaining % 60000) / 1000);
+  // Elapsed fraction against the real total duration (until - from).
+  const total = from && until > from ? until - from : 0;
+  const pct = total > 0 ? Math.min(100, Math.max(0, ((total - remaining) / total) * 100)) : 0;
   return (
     <div className="mt-1.5 flex items-center gap-2">
       <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
         <div
           className="h-full bg-purple-500 transition-all"
-          style={{ width: `${Math.min(100, 100 - (remaining / (until - (until - 600000))) * 100)}%` }}
+          style={{ width: `${pct}%` }}
         />
       </div>
       <span className="text-xs font-mono text-purple-300 tabular-nums">
@@ -160,6 +165,7 @@ export function Queue({ invoices, stats, onProcessAll, onSelect, onClearDone, on
                       {inv.status === 'delay' && inv.delay_until && (
                         <CountdownBadge
                           until={inv.delay_until}
+                          from={inv.delay_from}
                           onSkip={() => window.wiola.skipDelay(inv.id)}
                         />
                       )}

@@ -82,11 +82,9 @@ export function ConfirmTransportModal({ invoice, onClose, onSubmit }: Props) {
   return (
     <div
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
     >
       <div
         className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-xl p-6 space-y-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">
           <div className="text-3xl">🚛</div>
@@ -203,12 +201,9 @@ export function ConfirmTransportModal({ invoice, onClose, onSubmit }: Props) {
           >
             ✗ Nie procesuj — zatrzymaj batch
           </button>
-          <button
-            onClick={onClose}
-            className="w-full text-xs text-slate-500 hover:text-slate-400 transition-colors mt-1"
-          >
-            Anuluj — wrócę do tego później
-          </button>
+          <p className="text-xs text-slate-500 text-center pt-1">
+            Batch jest wstrzymany na tej fakturze — wybierz jedną z opcji powyżej, żeby kontynuować.
+          </p>
         </div>
       </div>
     </div>
