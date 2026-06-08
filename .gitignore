@@ -28,6 +28,10 @@
 **/gotowe/
 **/bledy/
 **/wstrzymane/
+
+# EWI Pro Invoice PDF archive written on every upload (real invoices)
+ewi pro/
+**/ewi pro/
 **/external/magemar.xlsx
 **/magemar.xlsx
 magemar.xlsx
