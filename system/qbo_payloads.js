@@ -16,6 +16,20 @@ const { roundHalfUp, rateDecimalPlaces } = require('./math');
 
 const _idCache = {};
 
+// Lines mapped to a generic catch-all item (Pallet, EWI Sample) carry the
+// original Kreisel description in the QBO line Description, so a one-off sample
+// like "klej antracytowy" stays readable on the document instead of just
+// showing "EWI Sample". Coded products leave Description empty (existing layout).
+function genericDescription(line) {
+  const sku = line && line.ewi_sku;
+  const desc = line && line.raw_desc ? String(line.raw_desc).trim() : '';
+  // Skip if missing or if it's just a marker placeholder (e.g. "__SAMPLE__").
+  if ((sku === '__SAMPLE__' || sku === '__PALLET__') && desc && !/^__/.test(desc)) {
+    return desc.slice(0, 4000); // QBO Description max 4000 chars
+  }
+  return null;
+}
+
 async function getEntityId(client, kind, displayName) {
   const k = `${client.realmId}:${kind}:${displayName}`;
   if (_idCache[k]) return _idCache[k];
@@ -265,7 +279,7 @@ async function buildKreiselBill(proClient, parsedKreisel, hmrcRate, dueDays = 90
     const itemId = await getItemId(proClient, l.ewi_sku);
     const unitPrice = roundHalfUp(l.total_pln / l.qty_kreisel, 4);
     const amount = roundHalfUp(l.qty_kreisel * unitPrice, 2);
-    lines.push({
+    const line = {
       DetailType: 'ItemBasedExpenseLineDetail',
       Amount: amount,
       ItemBasedExpenseLineDetail: {
@@ -274,7 +288,10 @@ async function buildKreiselBill(proClient, parsedKreisel, hmrcRate, dueDays = 90
         UnitPrice: unitPrice,
         TaxCodeRef: { value: tax.id },
       },
-    });
+    };
+    const desc = genericDescription(l);
+    if (desc) line.Description = desc;
+    lines.push(line);
   }
 
   return {
@@ -322,7 +339,7 @@ async function buildEwiproInvoice(proClient, parsedKreisel, hmrcRate, dueDays = 
     const dp = rateDecimalPlaces(l); // 2 for Pallet/sample, 3 for rest (historical-imitation)
     const unitPrice = roundHalfUp(pln_per_ewi / hmrcRate, dp);
     const amount = roundHalfUp(l.qty_ewi * unitPrice, 2);
-    lines.push({
+    const line = {
       DetailType: 'SalesItemLineDetail',
       Amount: amount,
       SalesItemLineDetail: {
@@ -331,7 +348,10 @@ async function buildEwiproInvoice(proClient, parsedKreisel, hmrcRate, dueDays = 
         UnitPrice: unitPrice,
         TaxCodeRef: { value: salesTax.id },
       },
-    });
+    };
+    const desc = genericDescription(l);
+    if (desc) line.Description = desc;
+    lines.push(line);
   }
 
   return {
@@ -378,7 +398,7 @@ async function buildEwistoreBillFromInvoice(storeClient, parsedKreisel, invoiceP
     const il = invoicePayload.Line[i];
     const kl = parsedKreisel.lines[i];
     const itemId = await getItemId(storeClient, kl.ewi_sku);
-    lines.push({
+    const line = {
       DetailType: 'ItemBasedExpenseLineDetail',
       Amount: il.Amount,
       ItemBasedExpenseLineDetail: {
@@ -387,7 +407,11 @@ async function buildEwistoreBillFromInvoice(storeClient, parsedKreisel, invoiceP
         UnitPrice: il.SalesItemLineDetail.UnitPrice,
         TaxCodeRef: { value: purchTax.id },
       },
-    });
+    };
+    // Mirror the Invoice's Description (set for generic-item lines), else derive.
+    const desc = il.Description || genericDescription(kl);
+    if (desc) line.Description = desc;
+    lines.push(line);
   }
 
   return {
