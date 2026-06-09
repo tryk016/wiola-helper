@@ -133,7 +133,61 @@ async function getItemId(client, name) {
     if (r) { _idCache[k] = r.Id; return r.Id; }
   } catch (e) { /* Sku not queryable in some editions — ignore */ }
 
-  throw new Error(`Item not found in realm ${client.realmId}: ${name} (searched: ${searchName})`);
+  // 6. AUTO-CREATE — a missing product (new colour / variant) is created on the
+  //    fly, cloning Type + account + VAT refs from an existing same-family
+  //    sibling so the books stay consistent. Skipped (→ throws) when there's no
+  //    sibling template, so stray typos like "test" never pollute the catalog.
+  const created = await createSiblingItem(client, searchName);
+  if (created) { _idCache[k] = created; return created; }
+
+  throw new Error(`Item not found in realm ${client.realmId}: ${name} (searched: ${searchName}). Brak podobnego produktu do skopiowania ustawień — załóż go ręcznie w QuickBooks.`);
+}
+
+// Strip a trailing pack-size token (" 1L", " 25KG", " 5L", …) so a name copied
+// from the Kreisel description ("PIGMENT-D-105 1L") matches the QBO convention
+// ("PIGMENT-D-105").
+function cleanItemName(name) {
+  return String(name).replace(/\s+(\d+(?:[.,]\d+)?\s*(?:KG|L|ML)|25KG|15L|20KG|10L|5L|7KG)\s*$/i, '').trim();
+}
+
+// Create a missing Item by cloning an existing sibling in the SAME product
+// family (e.g. PIGMENT-D-105 cloned from PIGMENT-D-104). Returns the new Id, or
+// null if no sibling template exists (caller then throws a clear error).
+async function createSiblingItem(client, rawName) {
+  const newName = cleanItemName(rawName);
+  if (!newName || newName.startsWith('__')) return null;       // never create markers
+  // Family = name without its last "-token" / " token" segment.
+  const family = newName.replace(/[-\s][^-\s]*$/, '').trim();
+  if (!family || family === newName) return null;              // no family → don't invent
+
+  const q = await client.query(
+    `SELECT * FROM Item WHERE Name LIKE '${family.replace(/'/g, "\\'")}%' MAXRESULTS 10`
+  );
+  const sibs = (q.QueryResponse.Item || []).filter(it => (it.Name || '').toUpperCase() !== newName.toUpperCase());
+  if (!sibs.length) return null;                               // no sibling → don't auto-create
+  const tmpl = sibs[0];
+
+  const body = { Name: newName, Type: tmpl.Type || 'Service' };
+  for (const f of ['IncomeAccountRef', 'ExpenseAccountRef', 'AssetAccountRef', 'SalesTaxCodeRef', 'PurchaseTaxCodeRef']) {
+    if (tmpl[f] && tmpl[f].value) body[f] = { value: tmpl[f].value };
+  }
+  if (tmpl.Taxable !== undefined) body.Taxable = tmpl.Taxable;
+  // Inventory items need extra required fields we can't safely infer — fall back
+  // to a non-inventory Service clone so creation always succeeds.
+  if (body.Type === 'Inventory') body.Type = 'NonInventory';
+
+  try {
+    const res = await client.post('item', body);
+    const id = res.Item && res.Item.Id;
+    if (id) {
+      console.log(`[auto-create] realm ${client.realmId}: created Item "${newName}" (Id ${id}) cloned from "${tmpl.Name}"`);
+      return id;
+    }
+  } catch (e) {
+    const detail = e && e.response && e.response.data ? JSON.stringify(e.response.data).slice(0, 300) : (e.message || e);
+    console.warn(`[auto-create] FAILED "${newName}" in realm ${client.realmId}: ${detail}`);
+  }
+  return null;
 }
 
 async function getAccountId(client, name) {
