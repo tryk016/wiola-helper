@@ -23,8 +23,12 @@ function getMysql() {
   return mysql;
 }
 
+// Once a connection attempt fails (e.g. on a PC with no access to 10.1.20.15),
+// remember it so we don't wait for a timeout on every subsequent invoice.
+let _mysqlDown = false;
+
 function mysqlAvailable() {
-  return !!(process.env.MYSQL_PASSWORD && getMysql());
+  return !!(process.env.MYSQL_PASSWORD && getMysql() && !_mysqlDown);
 }
 
 const SUPPLIER_ID_EWIPRO = 2884;
@@ -88,13 +92,26 @@ async function getPodRow(kreiselInvoiceRef) {
   // depending on which operator typed them. Match both via OR.
   const likeWithFse = `FSE-${nr}/${year}/%`;
   const likeNoFse   = `${nr}/${year}/%`;
-  const conn = await getMysql().createConnection({
-    host: process.env.MYSQL_HOST || '10.1.20.15',
-    port: parseInt(process.env.MYSQL_PORT || '3306', 10),
-    database: process.env.MYSQL_DB || 'dist',
-    user: process.env.MYSQL_USER || 'pbaranai',
-    password: process.env.MYSQL_PASSWORD,
-  });
+
+  // Connect with a short timeout. If the host is unreachable (e.g. Wiola's PC
+  // has no access to the internal network), fail fast, flag MySQL as down for
+  // the rest of the session, and degrade to the Magemar/prediction path instead
+  // of throwing — so the program keeps working without MySQL.
+  let conn;
+  try {
+    conn = await getMysql().createConnection({
+      host: process.env.MYSQL_HOST || '10.1.20.15',
+      port: parseInt(process.env.MYSQL_PORT || '3306', 10),
+      database: process.env.MYSQL_DB || 'dist',
+      user: process.env.MYSQL_USER || 'pbaranai',
+      password: process.env.MYSQL_PASSWORD,
+      connectTimeout: 4000,
+    });
+  } catch (e) {
+    _mysqlDown = true;
+    console.warn(`[resolve] MySQL niedostępny — przechodzę na Magemar/predykcję. (${e.code || e.message})`);
+    return [];
+  }
   try {
     const [rows] = await conn.execute(
       `SELECT id, branch_id, invoice_number_supplier, invoice_date, delivery_date,
@@ -108,8 +125,11 @@ async function getPodRow(kreiselInvoiceRef) {
       [SUPPLIER_ID_EWIPRO, likeWithFse, likeNoFse]
     );
     return rows;
+  } catch (e) {
+    console.warn(`[resolve] Zapytanie MySQL nie powiodło się: ${e.message}`);
+    return [];
   } finally {
-    await conn.end();
+    try { await conn.end(); } catch { /* ignore */ }
   }
 }
 
