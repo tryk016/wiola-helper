@@ -48,8 +48,19 @@ POTEM CODZIENNIE:
 
  3. Przeciagasz PDFy faktur Kreisla do okna programu.
 
- 4. Klikasz "Wyslij wszystkie".
+ 4. Klikasz "Skanuj" — program odczyta wszystkie faktury
+    (pozycje, daty, kurs). NIC jeszcze nie idzie do QuickBooks.
 
- 5. Gotowe faktury same znikaja po 30 sekundach (sa w "Historii").
+ 5. Sprawdzasz/poprawiasz w edytorze po prawej (kurs HMRC, ilosci,
+    ceny PLN/szt, ewentualnie brakujace produkty). Jak czegos brakuje
+    — wpisujesz nazwe, program sam zalozy produkt w QuickBooks.
+
+ 6. Klikasz "Upload do QuickBooks" — dopiero teraz faktury ida do QBO.
+
+ 7. Gotowe faktury same znikaja po chwili (sa w "Historii").
+
+UWAGA: miedzy fakturami jest losowe opoznienie 4-10 min (zeby historia
+       w QBO nie wygladala jak automat). Mozesz kliknac "Wyslij teraz"
+       zeby pominac.
 
 ============================================================
