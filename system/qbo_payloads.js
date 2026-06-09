@@ -133,39 +133,70 @@ async function getItemId(client, name) {
     if (r) { _idCache[k] = r.Id; return r.Id; }
   } catch (e) { /* Sku not queryable in some editions — ignore */ }
 
-  // 6. AUTO-CREATE — a missing product (new colour / variant) is created on the
-  //    fly, cloning Type + account + VAT refs from an existing same-family
-  //    sibling so the books stay consistent. Skipped (→ throws) when there's no
-  //    sibling template, so stray typos like "test" never pollute the catalog.
-  const created = await createSiblingItem(client, searchName);
+  // 6. AUTO-CREATE — a missing product is created on the fly. Whatever the user
+  //    typed becomes a real product. Accounts/VAT are cloned from a same-family
+  //    sibling when one exists (most accurate), otherwise from the catalog's
+  //    dominant account template (standard product accounts) so ANY new product
+  //    can be created. Only empty / marker names are refused.
+  const created = await createMissingItem(client, searchName);
   if (created) { _idCache[k] = created; return created; }
 
-  throw new Error(`Item not found in realm ${client.realmId}: ${name} (searched: ${searchName}). Brak podobnego produktu do skopiowania ustawień — załóż go ręcznie w QuickBooks.`);
+  throw new Error(`Nie udało się utworzyć produktu "${name}" w realm ${client.realmId} — sprawdź log (Ustawienia → Pomoc → Otwórz folder z logami) lub załóż go ręcznie w QuickBooks.`);
 }
 
 // Strip a trailing pack-size token (" 1L", " 25KG", " 5L", …) so a name copied
 // from the Kreisel description ("PIGMENT-D-105 1L") matches the QBO convention
-// ("PIGMENT-D-105").
+// ("PIGMENT-D-105"). Note: "MM" (grain size) is intentionally kept — QBO names
+// include it (e.g. "EWI-050-MOZ.CCCC 1,8 MM 25KG").
 function cleanItemName(name) {
   return String(name).replace(/\s+(\d+(?:[.,]\d+)?\s*(?:KG|L|ML)|25KG|15L|20KG|10L|5L|7KG)\s*$/i, '').trim();
 }
 
-// Create a missing Item by cloning an existing sibling in the SAME product
-// family (e.g. PIGMENT-D-105 cloned from PIGMENT-D-104). Returns the new Id, or
-// null if no sibling template exists (caller then throws a clear error).
-async function createSiblingItem(client, rawName) {
-  const newName = cleanItemName(rawName);
-  if (!newName || newName.startsWith('__')) return null;       // never create markers
-  // Family = name without its last "-token" / " token" segment.
-  const family = newName.replace(/[-\s][^-\s]*$/, '').trim();
-  if (!family || family === newName) return null;              // no family → don't invent
+// The catalog's dominant (Income, Expense) account pair — used as the template
+// for brand-new products that have no same-family sibling. Cached per realm.
+async function defaultTemplateRefs(client) {
+  const ck = `${client.realmId}:__defaultItemTemplate`;
+  if (_idCache[ck] !== undefined) return _idCache[ck];
+  let chosen = null;
+  try {
+    const all = await client.query(
+      "SELECT Id, Name, Type, IncomeAccountRef, ExpenseAccountRef, SalesTaxCodeRef, PurchaseTaxCodeRef, Taxable FROM Item WHERE Type='Service' MAXRESULTS 300"
+    );
+    const items = (all.QueryResponse.Item || []).filter(it => it.IncomeAccountRef && it.ExpenseAccountRef);
+    const tally = {};
+    for (const it of items) {
+      const key = `${it.IncomeAccountRef.value}|${it.ExpenseAccountRef.value}`;
+      (tally[key] = tally[key] || { n: 0, it }).n++;
+    }
+    const best = Object.values(tally).sort((a, b) => b.n - a.n)[0];
+    if (best) chosen = best.it;
+  } catch (e) {
+    console.warn(`[auto-create] defaultTemplateRefs failed in realm ${client.realmId}: ${e.message}`);
+  }
+  _idCache[ck] = chosen;
+  return chosen;
+}
 
-  const q = await client.query(
-    `SELECT * FROM Item WHERE Name LIKE '${family.replace(/'/g, "\\'")}%' MAXRESULTS 10`
-  );
-  const sibs = (q.QueryResponse.Item || []).filter(it => (it.Name || '').toUpperCase() !== newName.toUpperCase());
-  if (!sibs.length) return null;                               // no sibling → don't auto-create
-  const tmpl = sibs[0];
+// Create a missing Item. Clones Type + account + VAT refs from a same-family
+// sibling (e.g. PIGMENT-D-105 ← PIGMENT-D-104) when one exists, else from the
+// catalog's dominant account template. Returns the new Id (or null on failure).
+async function createMissingItem(client, rawName) {
+  const newName = cleanItemName(rawName);
+  if (!newName || newName.startsWith('__')) return null;       // never create markers / empty
+
+  // Prefer a same-family sibling (most accurate accounts).
+  let tmpl = null;
+  const family = newName.replace(/[-\s][^-\s]*$/, '').trim();
+  if (family && family !== newName) {
+    const q = await client.query(`SELECT * FROM Item WHERE Name LIKE '${family.replace(/'/g, "\\'")}%' MAXRESULTS 10`);
+    const sibs = (q.QueryResponse.Item || []).filter(
+      it => (it.Name || '').toUpperCase() !== newName.toUpperCase() && it.IncomeAccountRef
+    );
+    if (sibs.length) tmpl = sibs[0];
+  }
+  // Fall back to the catalog's standard account template so any product creates.
+  if (!tmpl) tmpl = await defaultTemplateRefs(client);
+  if (!tmpl) return null;
 
   const body = { Name: newName, Type: tmpl.Type || 'Service' };
   for (const f of ['IncomeAccountRef', 'ExpenseAccountRef', 'AssetAccountRef', 'SalesTaxCodeRef', 'PurchaseTaxCodeRef']) {
@@ -180,7 +211,7 @@ async function createSiblingItem(client, rawName) {
     const res = await client.post('item', body);
     const id = res.Item && res.Item.Id;
     if (id) {
-      console.log(`[auto-create] realm ${client.realmId}: created Item "${newName}" (Id ${id}) cloned from "${tmpl.Name}"`);
+      console.log(`[auto-create] realm ${client.realmId}: created Item "${newName}" (Id ${id}) cloned from "${tmpl.Name || 'default template'}"`);
       return id;
     }
   } catch (e) {
