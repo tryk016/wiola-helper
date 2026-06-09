@@ -137,12 +137,18 @@ Ok "wiola-helper\node_modules zainstalowane"
 # --- 6. build Wiola Helper (Vite only — pomijamy electron-builder przez symlink issue) ---
 Step 6 9 "Budowanie aplikacji (Vite + Electron main/preload compile)"
 Push-Location "$ROOT\wiola-helper"
-$buildOut = & "$nodeDir\npm.cmd" run build:vite 2>&1
-if (-not (Test-Path "$ROOT\wiola-helper\dist\index.html")) {
-    Write-Host ($buildOut -join "`n")
-    Fail "Build sie nie powiodl - brak dist\index.html"
-}
+# Vite wypisuje ostrzezenie "CJS build deprecated" na stderr. Przy EAP=Stop
+# zlaczenie 2>&1 zamienia to ostrzezenie w blad terminujacy, mimo ze build sie
+# udaje. Dlatego zmiekczamy EAP wokol tego wywolania i oceniamy sukces po
+# istnieniu dist\index.html (a nie po stderr).
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+& "$nodeDir\npm.cmd" run build:vite 2>&1 | ForEach-Object { Write-Host "       $_" }
+$ErrorActionPreference = $prevEAP
 Pop-Location
+if (-not (Test-Path "$ROOT\wiola-helper\dist\index.html")) {
+    Fail "Build sie nie powiodl - brak dist\index.html (zobacz komunikaty wyzej)."
+}
 Ok "Aplikacja zbudowana (dist\ + dist-electron\)"
 
 # --- 7. .env picker ------------------------------------------------------
