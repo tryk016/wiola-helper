@@ -227,7 +227,26 @@ async function resolveImport(kreiselRefOrParsed) {
     // MONTH BOUNDARY HANDLING:
     //   Predicted ATA day ≤ 3 OR day ≥ 28 → "ambiguous_month" — could be M or M±1.
     //   Such drafts go to "wstrzymane" (held) — operator must wait for Magemar update.
-    const provisionalEta = new Date(r.invoice_date * 1000 + 12 * 86400 * 1000);
+    // Base the +12d prediction on the MySQL POD invoice_date, or — when that's
+    // NULL (very common: warehouse leaves it blank) — fall back to the Kreisel
+    // PDF issue date. Without a valid base we'd compute Jan 1970, so instead
+    // hold the invoice for a manual month.
+    const baseMs = r.invoice_date
+      ? r.invoice_date * 1000
+      : (pdfIssueDate ? Date.parse(`${pdfIssueDate}T00:00:00Z`) : NaN);
+    if (!Number.isFinite(baseMs)) {
+      return {
+        ...base,
+        status: 'ambiguous_month',
+        confidence: 'predicted',
+        source: 'container_no_base_date',
+        hmrc_month_options: [],
+        container: truckReg,
+        pending_message: `Kontener ${truckReg} nie jest jeszcze w Magemar, a brak daty faktury (MySQL i PDF) do oszacowania ATA. Poczekaj na Magemar albo wpisz miesiąc HMRC ręcznie.`,
+        reason: 'container_no_base_date',
+      };
+    }
+    const provisionalEta = new Date(baseMs + 12 * 86400 * 1000);
     const provDay = provisionalEta.getUTCDate();
     const provMonth = `${provisionalEta.getUTCFullYear()}-${pad2(provisionalEta.getUTCMonth() + 1)}`;
     const reason = mag.status === 'not_found' ? 'container_not_in_magemar'
