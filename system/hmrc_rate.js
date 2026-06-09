@@ -72,6 +72,13 @@ async function getRate(dateOrYM, currencyCode = 'PLN') {
   } else {
     throw new Error(`Cannot parse date: ${dateOrYM}`);
   }
+  // Sanity guard: a zero/invalid date (e.g. epoch → 1970-1) must not silently
+  // hit the API and return a confusing 404. Reject implausible months.
+  const nowYear = new Date().getFullYear();
+  if (!Number.isInteger(year) || !Number.isInteger(month) ||
+      year < 2015 || year > nowYear + 1 || month < 1 || month > 12) {
+    throw new Error(`Nieprawidłowy miesiąc HMRC: "${dateOrYM}" → ${year}-${month}. Sprawdź datę dostawy lub wybrany miesiąc HMRC.`);
+  }
   const csv = await fetchMonth(year, month);
   const row = parseRow(csv, currencyCode);
   if (!row) throw new Error(`No rate for ${currencyCode} in ${year}-${month}`);

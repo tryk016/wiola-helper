@@ -10,7 +10,7 @@ interface Props {
 interface EditLine {
   ewi_sku: string;
   qty: string;        // kept as strings while editing
-  total_pln: string;
+  unit_pln: string;   // PLN price per unit (line total = qty × unit)
   raw_desc?: string;  // original Kreisel description (shown when SKU is blank)
   is_pallet?: boolean;
   is_sample?: boolean;
@@ -41,7 +41,7 @@ export function DraftEditor({ invoice }: Props) {
       (k?.lines ?? []).map(l => ({
         ewi_sku: l.ewi_sku,
         qty: String(l.qty_ewi ?? l.qty_kreisel ?? 0),
-        total_pln: String(l.total_pln ?? 0),
+        unit_pln: String(l.unit_pln ?? 0),
         raw_desc: l.raw_desc,
         is_pallet: l.is_pallet,
         is_sample: l.is_sample,
@@ -59,11 +59,12 @@ export function DraftEditor({ invoice }: Props) {
   const computed = useMemo(() => {
     return lines.map(l => {
       const qty = parseFloat(l.qty.replace(',', '.')) || 0;
-      const total_pln = parseFloat(l.total_pln.replace(',', '.')) || 0;
+      const unit_pln = parseFloat(l.unit_pln.replace(',', '.')) || 0;
+      const total_pln = Math.round(qty * unit_pln * 100) / 100;  // line total = qty × unit
       const { rate_gbp, amount_gbp } = rateValid
         ? lineGbp({ ewi_sku: l.ewi_sku, qty, total_pln, is_pallet: l.is_pallet, is_sample: l.is_sample }, rateNum)
         : { rate_gbp: 0, amount_gbp: 0 };
-      return { qty, total_pln, rate_gbp, amount_gbp };
+      return { qty, unit_pln, total_pln, rate_gbp, amount_gbp };
     });
   }, [lines, rateNum, rateValid]);
 
@@ -74,7 +75,7 @@ export function DraftEditor({ invoice }: Props) {
     setLines(prev => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   const removeLine = (idx: number) => setLines(prev => prev.filter((_, i) => i !== idx));
   const addLine = () =>
-    setLines(prev => [...prev, { ewi_sku: '', qty: '1', total_pln: '0' }]);
+    setLines(prev => [...prev, { ewi_sku: '', qty: '1', unit_pln: '0' }]);
 
   const canSave =
     rateValid &&
@@ -87,15 +88,19 @@ export function DraftEditor({ invoice }: Props) {
     try {
       await window.wiola.editDraft(invoice.id, {
         hmrc_rate: rateNum,
-        lines: lines.map(l => ({
-          ewi_sku: l.ewi_sku.trim(),
-          qty: parseFloat(l.qty.replace(',', '.')) || 0,
-          total_pln: parseFloat(l.total_pln.replace(',', '.')) || 0,
-          raw_desc: l.raw_desc,
-          is_pallet: l.is_pallet,
-          is_sample: l.is_sample,
-          is_pigment: l.is_pigment,
-        })),
+        lines: lines.map(l => {
+          const qty = parseFloat(l.qty.replace(',', '.')) || 0;
+          const unit = parseFloat(l.unit_pln.replace(',', '.')) || 0;
+          return {
+            ewi_sku: l.ewi_sku.trim(),
+            qty,
+            total_pln: Math.round(qty * unit * 100) / 100,  // backend stores total; unit = total/qty
+            raw_desc: l.raw_desc,
+            is_pallet: l.is_pallet,
+            is_sample: l.is_sample,
+            is_pigment: l.is_pigment,
+          };
+        }),
       });
       setSavedAt(Date.now());
     } catch (e) {
@@ -164,9 +169,10 @@ export function DraftEditor({ invoice }: Props) {
               <tr className="text-slate-500 border-b border-slate-700">
                 <th className="text-left py-1.5 pr-2">Produkt (SKU)</th>
                 <th className="text-right px-2 w-20">Ilość</th>
-                <th className="text-right px-2 w-28">PLN razem</th>
-                <th className="text-right px-2 w-24">GBP/szt</th>
-                <th className="text-right pl-2 w-28">GBP razem</th>
+                <th className="text-right px-2 w-24">PLN/szt</th>
+                <th className="text-right px-2 w-24">PLN razem</th>
+                <th className="text-right px-2 w-20">GBP/szt</th>
+                <th className="text-right pl-2 w-24">GBP razem</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
@@ -210,12 +216,13 @@ export function DraftEditor({ invoice }: Props) {
                     </td>
                     <td className="px-2">
                       <input
-                        value={l.total_pln}
-                        onChange={e => setLine(idx, { total_pln: e.target.value })}
+                        value={l.unit_pln}
+                        onChange={e => setLine(idx, { unit_pln: e.target.value })}
                         inputMode="decimal"
                         className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded font-mono text-right text-slate-100 focus:border-blue-500 outline-none"
                       />
                     </td>
+                    <td className="px-2 text-right font-mono text-slate-400">{c ? fmtPln(c.total_pln) : '—'}</td>
                     <td className="px-2 text-right font-mono text-slate-400">{c ? fmtGbp(c.rate_gbp) : '—'}</td>
                     <td className="pl-2 text-right font-mono text-emerald-300">{c ? fmtGbp(c.amount_gbp) : '—'}</td>
                     <td className="text-right whitespace-nowrap">
@@ -240,7 +247,7 @@ export function DraftEditor({ invoice }: Props) {
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-slate-700 font-semibold">
-                <td className="py-2 pr-2 text-right text-slate-400" colSpan={2}>SUMA:</td>
+                <td className="py-2 pr-2 text-right text-slate-400" colSpan={3}>SUMA:</td>
                 <td className="px-2 text-right font-mono">zł{fmtPln(totalPln)}</td>
                 <td></td>
                 <td className="pl-2 text-right font-mono text-emerald-300">£{fmtGbp(totalGbp)}</td>
