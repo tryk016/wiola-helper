@@ -361,7 +361,8 @@ export async function uploadInvoice(
 
     // EWI Pro Invoice PDF — fetch once, reuse for both the attachment and the
     // on-disk archive so a failure in one doesn't block the other.
-    const invFileName = `EWI-Pro-Invoice-${invDoc}.pdf`;
+    // File name = invoice number only (no prefix), e.g. "4703.pdf".
+    const invFileName = `${String(invDoc).replace(/[\/\\:*?"<>|]/g, '-')}.pdf`;
     let invPdf: Buffer | undefined;
     try {
       invPdf = await pro.getPdf(`invoice/${invId}/pdf`);
@@ -390,9 +391,7 @@ export async function uploadInvoice(
         const day = new Date().toISOString().slice(0, 10); // upload date
         const dir = pathMod.join(EWIPRO_ARCHIVE_ROOT, day);
         fs.mkdirSync(dir, { recursive: true });
-        // File name = invoice number only (no prefix), e.g. "4703.pdf".
-        const archiveName = `${String(invDoc).replace(/[\/\\:*?"<>|]/g, '-')}.pdf`;
-        const outPath = pathMod.join(dir, archiveName);
+        const outPath = pathMod.join(dir, invFileName);  // = invoice number only
         fs.writeFileSync(outPath, invPdf);
         ev.onProgress({ id: fileId, ewipro_pdf_path: outPath });
         console.log('[archive] EWI Pro Invoice →', outPath);
