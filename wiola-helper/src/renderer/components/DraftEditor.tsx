@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { Invoice } from '../types';
-import { lineGbp } from '../lib/gbp';
+import { lineGbp, roundHalfUp } from '../lib/gbp';
 
 interface Props {
   invoice: Invoice;
@@ -19,9 +19,11 @@ interface EditLine {
 
 const fmtGbp = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtPln = (n: number) => n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-// Unit price (GBP/szt) is computed to 3 dp (2 dp for pallets/samples) — show the
-// real value up to 3 places instead of rounding to 2.
-const fmtRate = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+// Unit price (GBP/szt): round half-up to 3 dp from the 4th decimal
+// (1.2347 -> 1.235), explicitly, so the display never depends on the engine's
+// toLocaleString rounding mode. Min 2 dp so small rates still show 2 places.
+const fmtRate = (n: number) =>
+  roundHalfUp(n, 3).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 /**
  * Editor for a scanned ('ready') invoice. The user can change the HMRC rate,
