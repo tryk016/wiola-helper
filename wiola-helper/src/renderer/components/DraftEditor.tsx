@@ -170,6 +170,7 @@ export function DraftEditor({ invoice }: Props) {
           <table className="w-full text-xs">
             <thead>
               <tr className="text-slate-500 border-b border-slate-700">
+                <th className="text-right pr-1 w-6">#</th>
                 <th className="text-left py-1.5 pr-2">Produkt (SKU)</th>
                 <th className="text-right px-2 w-20">Ilość</th>
                 <th className="text-right px-2 w-24">PLN/szt</th>
@@ -185,6 +186,7 @@ export function DraftEditor({ invoice }: Props) {
                 const tag = l.is_pallet ? '📦' : l.is_pigment ? '🎨' : l.is_sample ? '🧪' : '';
                 return (
                   <tr key={idx} className="hover:bg-slate-800/40">
+                    <td className="pr-1 text-right align-top pt-2 text-slate-600 font-mono text-[10px] tabular-nums">{idx + 1}</td>
                     <td className="py-1 pr-2">
                       <div className="flex items-center gap-1">
                         {tag && <span>{tag}</span>}
@@ -250,7 +252,7 @@ export function DraftEditor({ invoice }: Props) {
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-slate-700 font-semibold">
-                <td className="py-2 pr-2 text-right text-slate-400" colSpan={3}>SUMA:</td>
+                <td className="py-2 pr-2 text-right text-slate-400" colSpan={4}>SUMA:</td>
                 <td className="px-2 text-right font-mono">zł{fmtPln(totalPln)}</td>
                 <td></td>
                 <td className="pl-2 text-right font-mono text-emerald-300">£{fmtGbp(totalGbp)}</td>

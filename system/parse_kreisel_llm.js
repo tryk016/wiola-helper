@@ -292,6 +292,7 @@ async function parseKreiselWithLlm(pdfPath) {
 
   // Compute lines into our canonical shape (same as parse_kreisel_pl.js output)
   const lines = (data.lines || []).filter(l => l.ewi_sku !== null).map(l => ({
+    nr: l.nr,        // invoice line position — used to keep original order
     ewi_sku: l.ewi_sku,
     qty_kreisel: l.qty,
     qty_ewi: l.qty,  // Polish invoice — qty aligned

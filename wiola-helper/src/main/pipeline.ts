@@ -83,6 +83,7 @@ type ParsedKreisel = {
   sale_date?: string;
   container: string | null;
   lines: Array<{
+    nr?: number;
     ewi_sku: string;
     qty_kreisel: number;
     qty_ewi: number;
@@ -138,13 +139,15 @@ export async function scanInvoice(
     const k = (await parseKreiselWithLlm(pdfPath)) as ParsedKreisel;
 
     // Unknown-SKU lines are NO LONGER a hard gate — the user reviews and fixes
-    // every line in the editor. Fold any unmapped line into the draft as a
-    // blank-SKU row (keeping the original Kreisel description) so it shows up
-    // for manual correction instead of being silently dropped or blocking scan.
+    // every line in the editor. Fold any unmapped line into the draft, PRE-FILLED
+    // with the original Kreisel description (so the SKU field shows what's on the
+    // invoice instead of an empty hint — e.g. "PIGMENT-D-105 1L"). The user can
+    // accept it (auto-creates the product) or correct it.
     if (k.unmapped_lines?.length) {
       for (const u of k.unmapped_lines) {
         k.lines.push({
-          ewi_sku: '',
+          nr: u.nr,
+          ewi_sku: u.raw_desc || '',   // = what's on the invoice
           qty_kreisel: u.qty,
           qty_ewi: u.qty,
           unit_pln: u.unit_pln,
@@ -154,6 +157,8 @@ export async function scanInvoice(
       }
       k.unmapped_lines = [];
     }
+    // Restore the original invoice order (mapped + just-folded), by line number.
+    k.lines.sort((a, b) => (a.nr ?? Number.MAX_SAFE_INTEGER) - (b.nr ?? Number.MAX_SAFE_INTEGER));
 
     ev.onProgress({
       id: fileId,
