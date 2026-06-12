@@ -19,6 +19,9 @@ interface EditLine {
 
 const fmtGbp = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtPln = (n: number) => n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Unit price (GBP/szt) is computed to 3 dp (2 dp for pallets/samples) — show the
+// real value up to 3 places instead of rounding to 2.
+const fmtRate = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 
 /**
  * Editor for a scanned ('ready') invoice. The user can change the HMRC rate,
@@ -223,7 +226,7 @@ export function DraftEditor({ invoice }: Props) {
                       />
                     </td>
                     <td className="px-2 text-right font-mono text-slate-400">{c ? fmtPln(c.total_pln) : '—'}</td>
-                    <td className="px-2 text-right font-mono text-slate-400">{c ? fmtGbp(c.rate_gbp) : '—'}</td>
+                    <td className="px-2 text-right font-mono text-slate-400">{c ? fmtRate(c.rate_gbp) : '—'}</td>
                     <td className="pl-2 text-right font-mono text-emerald-300">{c ? fmtGbp(c.amount_gbp) : '—'}</td>
                     <td className="text-right whitespace-nowrap">
                       <button
