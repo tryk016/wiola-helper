@@ -129,15 +129,8 @@ Get-ChildItem $repoRoot -Recurse -File | ForEach-Object {
     $count++
 }
 Ok "Zaktualizowano $count plikow"
-
-# Record new commit SHA
-try {
-    $commitInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/$REPO_BRANCH" -Headers @{ 'User-Agent' = 'WiolaHelper' } -TimeoutSec 10
-    Set-Content -Path "$ROOT\.version" -Value $commitInfo.sha -Encoding ASCII -NoNewline
-    Ok "Wersja: $($commitInfo.sha.Substring(0,8))"
-} catch {
-    Warn "Nie udalo sie odczytac SHA z GitHub: $($_.Exception.Message)"
-}
+# (SHA zapisujemy do .version dopiero PO udanym buildzie ponizej, zeby nieudany
+#  build nigdy nie raportowal falszywie "masz najnowsza wersje")
 
 # --- 5. npm install if package.json changed ------------------------------
 Step 5 6 "Sprawdzanie zaleznosci"
@@ -163,13 +156,27 @@ if ($guiPkgChanged) {
 # --- 6. rebuild GUI ------------------------------------------------------
 Step 6 6 "Budowanie nowej wersji GUI"
 Push-Location "$ROOT\wiola-helper"
-$buildOut = & "$nodeDir\npm.cmd" run build:vite 2>&1
-if (-not (Test-Path "$ROOT\wiola-helper\dist\index.html")) {
-    Write-Host ($buildOut -join "`n")
-    Fail "Build sie nie powiodl"
-}
+# Vite wypisuje "CJS build deprecated" na stderr; przy EAP=Stop + 2>&1 to
+# przewraca skrypt mimo udanego buildu. Zmiekczamy EAP i oceniamy po dist.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+& "$nodeDir\npm.cmd" run build:vite 2>&1 | ForEach-Object { Write-Host "       $_" }
+$ErrorActionPreference = $prevEAP
 Pop-Location
+if (-not (Test-Path "$ROOT\wiola-helper\dist\index.html")) {
+    Fail "Build sie nie powiodl (zobacz komunikaty wyzej)"
+}
 Ok "GUI zbudowane"
+
+# Record new commit SHA ONLY after a successful build, so .version never
+# claims "up to date" when the rebuild actually failed.
+try {
+    $commitInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/$REPO_BRANCH" -Headers @{ 'User-Agent' = 'WiolaHelper' } -TimeoutSec 10
+    Set-Content -Path "$ROOT\.version" -Value $commitInfo.sha -Encoding ASCII -NoNewline
+    Ok "Wersja: $($commitInfo.sha.Substring(0,8))"
+} catch {
+    Warn "Nie udalo sie odczytac SHA z GitHub: $($_.Exception.Message)"
+}
 
 # --- restore .env + magemar (powinny i tak byc - preserve list je chronil) ---
 if ((Test-Path "$bakDir\.env") -and (-not (Test-Path "$ROOT\system\.env"))) {
