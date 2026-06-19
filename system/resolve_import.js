@@ -35,6 +35,25 @@ const SUPPLIER_ID_EWIPRO = 2884;
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
+// The warehouse stores delivery/invoice dates as UK-local midnight, so reading
+// the raw UNIX timestamp in UTC is off by the BST/GMT offset (shows the previous
+// day just before midnight — e.g. 1782169200 is 22 Jun 23:00 UTC = 23 Jun 00:00
+// UK). Extract calendar parts in Europe/London instead.
+const _londonFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+function londonParts(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const p = _londonFmt.formatToParts(d);
+  const g = t => parseInt(p.find(x => x.type === t).value, 10);
+  return { y: g('year'), m: g('month'), d: g('day') };
+}
+function londonDateStrFromUnix(unixSec) {
+  if (!unixSec) return null;
+  const { y, m, d } = londonParts(new Date(unixSec * 1000));
+  return `${y}-${pad2(m)}-${pad2(d)}`;
+}
+
 // Predict HMRC month from invoice_date + transit days. Includes month-boundary buffer.
 function predictFromInvoiceDate(base, invoiceDateIso, transitDays, container, magResult) {
   if (!invoiceDateIso) {
@@ -72,11 +91,11 @@ function predictFromInvoiceDate(base, invoiceDateIso, transitDays, container, ma
 function heuristicHmrcMonth(deliveryDate) {
   // For truck shipments: customs cleared shortly before warehouse receipt.
   // If delivery day ≤ 3 → previous month (customs cleared late prev month).
+  // Day/month read in UK local time (Europe/London), not UTC — the stored
+  // timestamp is UK-local midnight, so UTC would land on the wrong day.
   if (!(deliveryDate instanceof Date)) return null;
-  const day = deliveryDate.getUTCDate();
-  let y = deliveryDate.getUTCFullYear();
-  let m = deliveryDate.getUTCMonth() + 1;
-  if (day <= 3) {
+  let { y, m, d } = londonParts(deliveryDate);
+  if (d <= 3) {
     m -= 1;
     if (m === 0) { m = 12; y -= 1; }
   }
@@ -220,8 +239,8 @@ async function resolveImport(kreiselRefOrParsed) {
     branch_id: r.branch_id,
     invoice_number_supplier: r.invoice_number_supplier,
     truck_reg: truckReg,
-    invoice_date_pl: r.inv_dt,
-    delivery_date_uk: r.deliv_dt,
+    invoice_date_pl: londonDateStrFromUnix(r.invoice_date),
+    delivery_date_uk: londonDateStrFromUnix(r.delivery_date),
   };
 
   // Path 1: container — Magemar ATA (hard data, preferred)
@@ -247,13 +266,12 @@ async function resolveImport(kreiselRefOrParsed) {
     // MONTH BOUNDARY HANDLING:
     //   Predicted ATA day ≤ 3 OR day ≥ 28 → "ambiguous_month" — could be M or M±1.
     //   Such drafts go to "wstrzymane" (held) — operator must wait for Magemar update.
-    // Base the +12d prediction on the MySQL POD invoice_date, or — when that's
-    // NULL (very common: warehouse leaves it blank) — fall back to the Kreisel
-    // PDF issue date. Without a valid base we'd compute Jan 1970, so instead
-    // hold the invoice for a manual month.
-    const baseMs = r.invoice_date
-      ? r.invoice_date * 1000
-      : (pdfIssueDate ? Date.parse(`${pdfIssueDate}T00:00:00Z`) : NaN);
+    // Base the +12d prediction on the MySQL POD invoice_date (read as a UK-local
+    // calendar date), or — when that's NULL (very common: warehouse leaves it
+    // blank) — fall back to the Kreisel PDF issue date. Without a valid base we'd
+    // compute Jan 1970, so instead hold the invoice for a manual month.
+    const baseIso = r.invoice_date ? londonDateStrFromUnix(r.invoice_date) : (pdfIssueDate || null);
+    const baseMs = baseIso ? Date.parse(`${baseIso}T00:00:00Z`) : NaN;
     if (!Number.isFinite(baseMs)) {
       return {
         ...base,
@@ -365,8 +383,8 @@ async function lookupPodTransport(kreiselInvoiceRef) {
     is_placeholder: isPlaceholder,
     is_container: isContainer,
     delivered: !!r.delivered,
-    delivery_date: r.deliv_dt ? new Date(r.deliv_dt).toISOString().slice(0, 10) : null,
-    invoice_date: r.inv_dt ? new Date(r.inv_dt).toISOString().slice(0, 10) : null,
+    delivery_date: londonDateStrFromUnix(r.delivery_date),
+    invoice_date: londonDateStrFromUnix(r.invoice_date),
   };
 }
 
