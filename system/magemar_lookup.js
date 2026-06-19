@@ -78,11 +78,14 @@ function isoDate(d) {
 
 let _cache = null;
 
+// Drop the in-memory index so the next lookup re-reads the file. Call after
+// replacing magemar.xlsx (e.g. via the in-app "Wybierz plik Magemar" button).
+function clearCache() { _cache = null; }
+
 async function loadIndex(xlsxPath = null) {
   const fs = require('fs');
   // Re-resolve path each time in case files appeared/moved
   const actualPath = xlsxPath || findMagemarPath() || SEARCH_PATHS[1];
-  if (_cache && _cache.path === actualPath) return _cache;
   if (!fs.existsSync(actualPath)) {
     throw new Error(
       `Magemar Excel not found. Sprawdzano:\n` +
@@ -91,6 +94,9 @@ async function loadIndex(xlsxPath = null) {
     );
   }
   const stat = fs.statSync(actualPath);
+  // Reuse cache only if the same file AND it hasn't changed on disk (mtime) —
+  // so a replaced file (same path, new content) is picked up without restart.
+  if (_cache && _cache.path === actualPath && _cache.mtimeMs === stat.mtimeMs) return _cache;
   const ageHours = (Date.now() - stat.mtime.getTime()) / 3600000;
   if (ageHours > 24) {
     console.warn(`⚠️  magemar.xlsx ma ${ageHours.toFixed(1)}h (>24h). Rozważ pobranie świeższego z SharePoint.`);
@@ -115,7 +121,7 @@ async function loadIndex(xlsxPath = null) {
       actual_delivery: toDate(ws.getCell(r, COLS.actual_delivery).value),
     });
   }
-  _cache = { path: actualPath, index: idx, mtime: stat.mtime };
+  _cache = { path: actualPath, index: idx, mtime: stat.mtime, mtimeMs: stat.mtimeMs };
   return _cache;
 }
 
@@ -152,7 +158,7 @@ async function lookupContainer(containerNo, xlsxPath = DEFAULT_PATH) {
   };
 }
 
-module.exports = { loadIndex, lookupContainer, isContainerNumber };
+module.exports = { loadIndex, lookupContainer, isContainerNumber, clearCache };
 
 if (require.main === module) {
   (async () => {

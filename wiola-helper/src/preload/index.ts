@@ -52,6 +52,7 @@ const api = {
 
   // Health
   healthCheck: () => ipcRenderer.invoke('health:check'),
+  pickMagemar: () => ipcRenderer.invoke('magemar:pick'),
   appVersion: () => ipcRenderer.invoke('app:version'),
   openPath: (p: string) => ipcRenderer.invoke('shell:openPath', p),
   openLogFolder: () => ipcRenderer.invoke('support:openLogFolder'),

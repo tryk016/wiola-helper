@@ -422,6 +422,27 @@ ipcMain.handle('health:check', async () => {
   return { magemar, qbo };
 });
 
+// Pick a Magemar file from anywhere (any name) and copy it into place as
+// C:\kreisel\magemar.xlsx — so Wiola doesn't have to rename/copy it manually.
+ipcMain.handle('magemar:pick', async () => {
+  const res = await dialog.showOpenDialog(mainWindow!, {
+    title: 'Wybierz plik Magemar (dowolna nazwa)',
+    filters: [{ name: 'Excel', extensions: ['xlsx', 'xlsm', 'xls'] }],
+    properties: ['openFile'],
+  });
+  if (res.canceled || !res.filePaths.length) return { ok: false, canceled: true };
+  const src = res.filePaths[0];
+  const dest = 'C:\\kreisel\\magemar.xlsx';
+  try {
+    fs.copyFileSync(src, dest);
+    // Drop the cached index so the new file is used immediately (no restart).
+    try { magemarLookup.clearCache?.(); } catch { /* older system module */ }
+    return { ok: true, source: src, dest };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+
 ipcMain.handle('pending:recheck', async () => {
   // Reload Magemar
   try { await magemarLookup.loadIndex(); } catch {}

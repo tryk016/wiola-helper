@@ -101,6 +101,16 @@ export function App() {
     await window.wiola.uploadAll(true);
   };
 
+  const handlePickMagemar = async () => {
+    const res = await window.wiola.pickMagemar();
+    if (res?.ok) {
+      const h = await window.wiola.healthCheck();
+      store.setHealth(h as Health);
+    } else if (res && !res.canceled && res.error) {
+      alert('Nie udało się wczytać Magemar: ' + res.error);
+    }
+  };
+
   const stats = {
     waiting: store.queue.filter(q => q.status === 'waiting').length,
     processing: store.queue.filter(q => ['parsing', 'processing'].includes(q.status)).length,
@@ -124,7 +134,7 @@ export function App() {
             <p className="text-xs text-slate-400 leading-tight">Kreisel → EWI Pro → EWI Store</p>
           </div>
         </div>
-        <StatusBar health={store.health} />
+        <StatusBar health={store.health} onPickMagemar={handlePickMagemar} />
       </header>
 
       <main className="flex-1 flex overflow-hidden">

@@ -2,6 +2,7 @@ interface WiolaApi {
   pickPdfs: () => Promise<string[]>;
   getPathForFile: (file: File) => string;
   healthCheck: () => Promise<unknown>;
+  pickMagemar: () => Promise<{ ok: boolean; canceled?: boolean; source?: string; dest?: string; error?: string }>;
   appVersion: () => Promise<string>;
   openPath: (p: string) => Promise<string>;
 
