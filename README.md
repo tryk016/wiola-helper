@@ -1,11 +1,11 @@
-# Wiola Helper
+# QB Helper
 
-Internal accounting automation for **EWI Store Ltd** + **EWI Pro Insulation Systems Ltd**.
+Internal accounting automation for 
 
-Processes Kreisel (Poland) supplier invoices end-to-end:
+Processes  (Poland) supplier invoices end-to-end:
 
 ```
-Kreisel PDF → LLM parse → MySQL/Magemar resolve → HMRC FX → QBO (3 docs + attachment)
+ PDF → LLM parse → MySQL/Magemar resolve → HMRC FX → QBO (3 docs + attachment)
 ```
 
 ## Architecture
