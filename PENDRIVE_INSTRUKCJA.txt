@@ -4,8 +4,8 @@
 
 CO ROBISZ TY (Patryk):
 
- 0. Token GitHub (repo tryk016/wiola-helper jest PRYWATNE — bez tokena
-    instalacja i aktualizacje nie pobiora kodu). Raz na rok:
+ 0. Token GitHub — TYLKO jesli repo tryk016/wiola-helper jest PRYWATNE
+    (publiczne repo: pomin ten krok i linijke GITHUB_TOKEN nizej):
       github.com → Settings → Developer settings → Personal access tokens
       → Fine-grained tokens → Generate new token
         - Repository access: Only select repositories → tryk016/wiola-helper
@@ -16,16 +16,16 @@ CO ROBISZ TY (Patryk):
  1. Skopiuj swoj plik:
       ZRODLO:  C:\kreisel\system\.env
       NA:      <litera pendrive>:\.env   (np. F:\.env)
-    i dopisz w nim linijke:
+    ustaw QBO_ENV=production, wyczysc realm ID i refresh tokeny obu firm
+    (Wiola loguje sie swiezo), a przy prywatnym repo dopisz:
       GITHUB_TOKEN=github_pat_...
 
-    UWAGA: ten plik zawiera PRODUCTION tokeny QBO, klucz Anthropic
-           i token GitHub. Trzymaj pendrive bezpiecznie po instalacji.
+    UWAGA: ten plik zawiera PRODUCTION klucze QBO, klucz Anthropic
+           i haslo MySQL. Trzymaj pendrive bezpiecznie po instalacji.
 
  2. Skopiuj na pendrive (obok .env) z C:\kreisel\:
       setup_wiola.cmd
       setup_wiola.ps1
-      update_wiola.ps1    (do jednorazowej podmiany na starych instalacjach)
       INSTRUKCJA_IT.md    (instrukcja dla informatyka)
 
  3. Dodatkowo na pendrive moze byc plik:
@@ -40,7 +40,7 @@ CO ROBI WIOLA / INFORMATYK NA KOMPUTERZE (szczegoly: INSTRUKCJA_IT.md):
  3. Okienko "Wybierz plik .env z pendrive" — pendrive (np. F:\)
     → .env → OK.
 
- 4. Czarne okno — 5-10 min, sciaga kod z GitHub (z tokenem) i Node.js.
+ 4. Czarne okno — 5-10 min, sciaga kod z GitHub i Node.js.
 
  5. Po zakonczeniu na pulpicie pojawia sie skrot "Wiola Helper".
 

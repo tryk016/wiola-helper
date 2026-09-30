@@ -38,7 +38,7 @@ export function getLocalSha(): string | undefined {
 
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
   const localSha = getLocalSha();
-  // The repo is private — without GITHUB_TOKEN the API answers 404.
+  // Optional: only needed if the repo is private (the API then answers 404 without it).
   const token = readEnv().GITHUB_TOKEN;
   try {
     const r = await axios.get(REPO_API_URL, {

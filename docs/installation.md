@@ -58,12 +58,12 @@ QBO_EWISTORE_REFRESH_TOKEN=
 
 Resztę (Client ID/Secret dla obu envs, ANTHROPIC, MYSQL) zostaw bez zmian.
 
-**3.** Dopisz token GitHub (repo jest prywatne — bez niego instalator nie pobierze kodu; jak go zrobić: [Konfiguracja .env → `GITHUB_TOKEN`](env-config.html)):
+**3.** Tylko jeśli repo jest prywatne — dopisz token GitHub (jak go zrobić: [Konfiguracja .env → `GITHUB_TOKEN`](env-config.html)):
 ```
 GITHUB_TOKEN=github_pat_...
 ```
 
-**4.** Skopiuj na pendrive z `C:\kreisel\`: `setup_wiola.cmd`, `setup_wiola.ps1` (muszą leżeć obok siebie), `update_wiola.ps1`, `INSTRUKCJA_IT.md`.
+**4.** Skopiuj na pendrive z `C:\kreisel\`: `setup_wiola.cmd`, `setup_wiola.ps1` (muszą leżeć obok siebie), `INSTRUKCJA_IT.md`.
 
 ### D) Zapisz osobno (nie na pendrive!)
 
@@ -89,11 +89,11 @@ GITHUB_TOKEN=github_pat_...
 - Wybierz **.env**
 - Klik **OK**
 
-(Brak `GITHUB_TOKEN` w `.env` → skrypt poprosi o wklejenie tokena.)
+(Repo prywatne i brak `GITHUB_TOKEN` w `.env` → skrypt poprosi o wklejenie tokena.)
 
 **5.** Dokończenie:
 ```
-[3/9] Pobieranie kodu z GitHub            OK  (z tokenem)
+[3/9] Pobieranie kodu z GitHub            OK
 [4/9] Pobieranie Node.js v22.11.0         OK  (~30 MB)
 [5/9] Instalacja zaleznosci system        OK  (~30s)
 [6/9] Instalacja zaleznosci GUI           OK  (~2 min)
@@ -262,9 +262,7 @@ cd C:\kreisel
 ```
 Skrypt zachowuje `.env`, `magemar.xlsx`, foldery robocze, state.
 
-Repo jest prywatne: aktualizacja potrzebuje `GITHUB_TOKEN` w `.env`. Instalacje sprzed 30.09.2026 mają stary
-`update_wiola.ps1` bez obsługi tokena — raz podmień go z pendrive'a i uruchom `update_wiola.cmd` (zapyta o token).
-Szczegóły: `INSTRUKCJA_IT.md`, punkt 4.
+Gdyby repo było prywatne: aktualizacja użyje `GITHUB_TOKEN` z `.env`, a gdy go brak — zapyta o token i go zapisze.
 
 ---
 

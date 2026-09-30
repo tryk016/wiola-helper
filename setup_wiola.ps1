@@ -3,9 +3,9 @@
 #
 # What this does (no admin needed):
 #   1. Creates C:\kreisel\ folder
-#   2. Opens file picker → user selects .env from USB stick. The repo is
-#      private: .env must hold GITHUB_TOKEN (else the script asks for it)
-#   3. Downloads project ZIP from GitHub (with the token) → C:\kreisel\,
+#   2. Opens file picker → user selects .env from USB stick
+#   3. Downloads project ZIP from GitHub → C:\kreisel\ (no token needed while
+#      the repo is public; if GitHub refuses, uses/asks for GITHUB_TOKEN),
 #      puts .env → C:\kreisel\system\.env
 #   4. Downloads portable Node.js 22 LTS → C:\kreisel\nodejs\
 #   5-6. Runs npm install in system\ and wiola-helper\
@@ -27,7 +27,7 @@ $REPO_NAME     = 'wiola-helper'
 $REPO_BRANCH   = 'main'
 $NODE_VERSION  = 'v22.11.0'
 $NODE_ZIP_URL  = "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-win-x64.zip"
-# API zipball (not github.com/archive) — it accepts a token for the private repo
+# API zipball (not github.com/archive) — also accepts a token if the repo goes private
 $REPO_ZIP_URL  = "https://api.github.com/repos/$REPO_USER/$REPO_NAME/zipball/$REPO_BRANCH"
 
 # --- helpers --------------------------------------------------------------
@@ -48,16 +48,39 @@ function Get-EnvValue($path, $key) {
     return ''
 }
 function GitHubHeaders($token) {
-    @{ 'User-Agent' = 'WiolaHelper'; 'Accept' = 'application/vnd.github+json'; 'Authorization' = "Bearer $token" }
+    $h = @{ 'User-Agent' = 'WiolaHelper'; 'Accept' = 'application/vnd.github+json' }
+    if ($token) { $h['Authorization'] = "Bearer $token" }
+    return $h
 }
-# Readable message for a failed GitHub request (private repo answers 404 without access).
-function GitHubError($err) {
-    $code = $null
-    try { $code = [int]$err.Exception.Response.StatusCode } catch { }
+function GitHubStatus($err) { try { return [int]$err.Exception.Response.StatusCode } catch { return 0 } }
+# Readable message for a failed GitHub request (a private repo answers 404 without access).
+function GitHubError($err, $token) {
+    $code = GitHubStatus $err
     if ($code -in 401, 403, 404) {
-        return "GitHub odrzucil token (HTTP $code). Token wygasl albo nie ma dostepu do $REPO_USER/$REPO_NAME - popros Patryka o nowy."
+        if ($token) { return "GitHub odrzucil token (HTTP $code). Token wygasl albo nie ma dostepu do $REPO_USER/$REPO_NAME - popros Patryka o nowy." }
+        return "GitHub nie wpuszcza bez tokena (HTTP $code) - repozytorium jest prywatne, potrzebny GITHUB_TOKEN od Patryka."
     }
     return $err.Exception.Message
+}
+# Download the repo ZIP. A public repo needs no token; if GitHub refuses an
+# anonymous request (repo made private), ask for a token once and retry.
+# Returns the token that worked ('' = none needed).
+function Get-RepoZip($token, $outFile) {
+    try {
+        Invoke-WebRequest -Uri $REPO_ZIP_URL -Headers (GitHubHeaders $token) -OutFile $outFile -UseBasicParsing
+        return $token
+    } catch {
+        if ($token -or ((GitHubStatus $_) -notin 401, 403, 404)) { Fail "Nie udalo sie pobrac z GitHub: $(GitHubError $_ $token)" }
+    }
+    Warn "GitHub nie wpuszcza bez tokena (repozytorium prywatne)."
+    $token = (Read-Host "Wklej token GitHub od Patryka i nacisnij Enter").Trim()
+    if (-not $token) { Fail "Bez tokena GitHub nie da sie pobrac kodu." }
+    try {
+        Invoke-WebRequest -Uri $REPO_ZIP_URL -Headers (GitHubHeaders $token) -OutFile $outFile -UseBasicParsing
+    } catch {
+        Fail "Nie udalo sie pobrac z GitHub: $(GitHubError $_ $token)"
+    }
+    return $token
 }
 
 # --- 1. project folder ----------------------------------------------------
@@ -76,7 +99,7 @@ if (Test-Path "$ROOT\system" -PathType Container) {
 if (-not (Test-Path $ROOT)) { New-Item -ItemType Directory -Path $ROOT | Out-Null }
 Ok "$ROOT"
 
-# --- 2. .env from USB stick (needed first: it holds the GitHub token) ----
+# --- 2. .env from USB stick (before the download: may hold GITHUB_TOKEN) -
 Step 2 9 "Wskaz plik .env z pendrive"
 Add-Type -AssemblyName System.Windows.Forms
 $dlg = New-Object System.Windows.Forms.OpenFileDialog
@@ -95,27 +118,16 @@ if ($dlg.ShowDialog() -eq 'OK') {
     $envSource = $envBackup
     Ok "Nie wybrano pliku - zostaje obecny .env"
 } else {
-    Fail "Bez pliku .env nie da sie zainstalowac (klucze QBO, Anthropic, MySQL, token GitHub)."
+    Fail "Bez pliku .env nie da sie zainstalowac (klucze QBO, Anthropic, MySQL)."
 }
-
 $GH_TOKEN = Get-EnvValue $envSource 'GITHUB_TOKEN'
-$addTokenToEnv = $false
-if (-not $GH_TOKEN) {
-    Warn "W .env brak GITHUB_TOKEN (repozytorium jest prywatne)."
-    $GH_TOKEN = (Read-Host "Wklej token GitHub od Patryka i nacisnij Enter").Trim()
-    if (-not $GH_TOKEN) { Fail "Bez tokena GitHub nie da sie pobrac kodu." }
-    $addTokenToEnv = $true
-}
-Ok "Token GitHub jest"
 
 # --- 3. download project ZIP from GitHub ---------------------------------
 Step 3 9 "Pobieranie kodu z GitHub"
 $repoZip = "$env:TEMP\wiola_repo.zip"
-try {
-    Invoke-WebRequest -Uri $REPO_ZIP_URL -Headers (GitHubHeaders $GH_TOKEN) -OutFile $repoZip -UseBasicParsing
-} catch {
-    Fail "Nie udalo sie pobrac z GitHub: $(GitHubError $_)"
-}
+$usedToken = Get-RepoZip $GH_TOKEN $repoZip
+$addTokenToEnv = [bool]($usedToken -and -not $GH_TOKEN)   # typed in just now -> save to .env
+$GH_TOKEN = $usedToken
 Ok "Pobrano $([math]::Round((Get-Item $repoZip).Length/1MB,1)) MB"
 
 Write-Host "       Rozpakowywanie..."

@@ -277,7 +277,7 @@ export function SettingsView({ onClose }: Props) {
         </Section>
 
         {/* GitHub token — the repo is private, updates need it */}
-        <Section title="🔑 Token GitHub" subtitle="Potrzebny do aktualizacji (repozytorium jest prywatne). Nowy token dostaniesz od Patryka.">
+        <Section title="🔑 Token GitHub" subtitle="Potrzebny do aktualizacji tylko wtedy, gdy repozytorium GitHub jest prywatne. Token dostaniesz od Patryka.">
           <Field label="GITHUB_TOKEN" value={dirty.GITHUB_TOKEN ?? env.GITHUB_TOKEN} onChange={v => setField('GITHUB_TOKEN', v)} mono secret />
         </Section>
 

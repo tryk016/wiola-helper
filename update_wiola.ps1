@@ -22,7 +22,7 @@ $ROOT          = 'C:\kreisel'
 $REPO_USER     = 'tryk016'
 $REPO_NAME     = 'wiola-helper'
 $REPO_BRANCH   = 'main'
-# API zipball (not github.com/archive) — it accepts a token for the private repo
+# API zipball (not github.com/archive) — also accepts a token if the repo goes private
 $REPO_ZIP_URL  = "https://api.github.com/repos/$REPO_USER/$REPO_NAME/zipball/$REPO_BRANCH"
 
 function Step($n, $total, $msg) {
@@ -42,16 +42,39 @@ function Get-EnvValue($path, $key) {
     return ''
 }
 function GitHubHeaders($token) {
-    @{ 'User-Agent' = 'WiolaHelper'; 'Accept' = 'application/vnd.github+json'; 'Authorization' = "Bearer $token" }
+    $h = @{ 'User-Agent' = 'WiolaHelper'; 'Accept' = 'application/vnd.github+json' }
+    if ($token) { $h['Authorization'] = "Bearer $token" }
+    return $h
 }
-# Readable message for a failed GitHub request (private repo answers 404 without access).
-function GitHubError($err) {
-    $code = $null
-    try { $code = [int]$err.Exception.Response.StatusCode } catch { }
+function GitHubStatus($err) { try { return [int]$err.Exception.Response.StatusCode } catch { return 0 } }
+# Readable message for a failed GitHub request (a private repo answers 404 without access).
+function GitHubError($err, $token) {
+    $code = GitHubStatus $err
     if ($code -in 401, 403, 404) {
-        return "GitHub odrzucil token (HTTP $code). Token wygasl albo nie ma dostepu do $REPO_USER/$REPO_NAME - wpisz nowy w Wiola Helper > Ustawienia > Token GitHub albo popros Patryka."
+        if ($token) { return "GitHub odrzucil token (HTTP $code). Token wygasl albo nie ma dostepu do $REPO_USER/$REPO_NAME - wpisz nowy w Wiola Helper > Ustawienia > Token GitHub albo popros Patryka." }
+        return "GitHub nie wpuszcza bez tokena (HTTP $code) - repozytorium jest prywatne, potrzebny GITHUB_TOKEN od Patryka."
     }
     return $err.Exception.Message
+}
+# Download the repo ZIP. A public repo needs no token; if GitHub refuses an
+# anonymous request (repo made private), ask for a token once and retry.
+# Returns the token that worked ('' = none needed).
+function Get-RepoZip($token, $outFile) {
+    try {
+        Invoke-WebRequest -Uri $REPO_ZIP_URL -Headers (GitHubHeaders $token) -OutFile $outFile -UseBasicParsing
+        return $token
+    } catch {
+        if ($token -or ((GitHubStatus $_) -notin 401, 403, 404)) { Fail "Nie udalo sie pobrac z GitHub: $(GitHubError $_ $token)" }
+    }
+    Warn "GitHub nie wpuszcza bez tokena (repozytorium prywatne)."
+    $token = (Read-Host "Wklej token GitHub od Patryka i nacisnij Enter").Trim()
+    if (-not $token) { Fail "Bez tokena GitHub nie da sie pobrac aktualizacji." }
+    try {
+        Invoke-WebRequest -Uri $REPO_ZIP_URL -Headers (GitHubHeaders $token) -OutFile $outFile -UseBasicParsing
+    } catch {
+        Fail "Nie udalo sie pobrac z GitHub: $(GitHubError $_ $token)"
+    }
+    return $token
 }
 
 # --- 0. sanity check -----------------------------------------------------
@@ -63,18 +86,9 @@ if (-not (Test-Path "$ROOT\nodejs\node.exe")) {
 }
 $nodeDir = "$ROOT\nodejs"
 
-# The repo is private: the download needs GITHUB_TOKEN from .env. Older
-# installs don't have it yet — ask once and save it (only happens when run
-# by hand from update_wiola.cmd; the in-app update check needs the token too).
+# Optional: only needed if the repo is private (see Get-RepoZip).
 $envPath  = "$ROOT\system\.env"
 $GH_TOKEN = Get-EnvValue $envPath 'GITHUB_TOKEN'
-if (-not $GH_TOKEN) {
-    Warn "W $envPath brak GITHUB_TOKEN (repozytorium jest prywatne)."
-    $GH_TOKEN = (Read-Host "Wklej token GitHub od Patryka i nacisnij Enter").Trim()
-    if (-not $GH_TOKEN) { Fail "Bez tokena GitHub nie da sie pobrac aktualizacji." }
-    Add-Content -Path $envPath -Value "`r`nGITHUB_TOKEN=$GH_TOKEN" -Encoding ASCII
-    Ok "Zapisano GITHUB_TOKEN w .env"
-}
 
 # --- 1. is Wiola Helper running? -----------------------------------------
 Step 1 6 "Sprawdzanie czy Wiola Helper jest zamknieta"
@@ -102,11 +116,13 @@ Ok "Backup w $bakDir"
 Step 3 6 "Pobieranie najnowszej wersji z GitHub"
 $repoZip = "$env:TEMP\wiola_update.zip"
 if (Test-Path $repoZip) { Remove-Item $repoZip -Force }
-try {
-    Invoke-WebRequest -Uri $REPO_ZIP_URL -Headers (GitHubHeaders $GH_TOKEN) -OutFile $repoZip -UseBasicParsing
-} catch {
-    Fail "Nie udalo sie pobrac z GitHub: $(GitHubError $_)"
+$usedToken = Get-RepoZip $GH_TOKEN $repoZip
+if ($usedToken -and -not $GH_TOKEN) {
+    # typed in just now -> keep it for the next update and the in-app check
+    Add-Content -Path $envPath -Value "`r`nGITHUB_TOKEN=$usedToken" -Encoding ASCII
+    Ok "Zapisano GITHUB_TOKEN w .env"
 }
+$GH_TOKEN = $usedToken
 Ok "Pobrano $([math]::Round((Get-Item $repoZip).Length/1MB,1)) MB"
 
 # --- 4. extract + overwrite source files ---------------------------------

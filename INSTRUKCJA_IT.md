@@ -3,9 +3,8 @@
 Jak pobrać, zainstalować, zaktualizować i uruchomić Wiola Helper na komputerze z Windows.
 
 Wiola Helper to aplikacja okienkowa (Electron) do księgowania faktur Kreisel w QuickBooks Online
-(EWI Pro + EWI Store). Kod jest w **prywatnym** repozytorium GitHub `tryk016/wiola-helper` —
-instalator pobiera go sam, tokenem zapisanym w pliku `.env`, więc **konto GitHub nie jest potrzebne**.
-Na komputerze wszystko ląduje w `C:\kreisel\`.
+(EWI Pro + EWI Store). Kod jest w repozytorium GitHub `tryk016/wiola-helper` — instalator pobiera go sam,
+**konto GitHub nie jest potrzebne**. Na komputerze wszystko ląduje w `C:\kreisel\`.
 
 ---
 
@@ -20,19 +19,18 @@ Na komputerze wszystko ląduje w `C:\kreisel\`.
 
 ## 2. Co dostajesz od Patryka
 
-Pendrive albo paczka ZIP (`Wiola-Helper-IT-*.zip`) z plikami:
+Paczka ZIP (`Wiola-Helper-IT-*.zip`) albo pendrive z plikami:
 
 | Plik | Po co |
 |---|---|
 | `setup_wiola.cmd` + `setup_wiola.ps1` | instalator (muszą leżeć obok siebie) |
-| `update_wiola.ps1` | do jednorazowej podmiany na starszych instalacjach (punkt 4) |
 | `INSTRUKCJA_IT.md` | ta instrukcja |
 
 **Osobno** (pendrive albo inny bezpieczny kanał — nigdy w ZIP-ie wysłanym mailem):
 
 | Plik | Po co |
 |---|---|
-| `.env` | klucze API, hasła i token GitHub (`GITHUB_TOKEN=...`) — **poufny** |
+| `.env` | klucze API i hasła (QuickBooks, Anthropic, MySQL) — **poufny** |
 
 Plus loginy do QuickBooks Online (EWI Pro i EWI Store) dla osoby, która będzie korzystać z aplikacji.
 
@@ -42,32 +40,18 @@ Plus loginy do QuickBooks Online (EWI Pro i EWI Store) dla osoby, która będzie
 
 ## 3. Pierwsza instalacja (nowy komputer, ok. 10 min)
 
-1. Rozpakuj ZIP (albo włóż pendrive) i włóż pendrive z `.env`.
+1. Rozpakuj ZIP gdziekolwiek (np. do *Pobrane*) i włóż pendrive z `.env`.
 2. Kliknij prawym na `setup_wiola.cmd` → **Otwórz**
    (jeśli SmartScreen ostrzeże → *Więcej informacji → Uruchom mimo to*).
 3. Krok 2 z 9: okno **„Wybierz plik .env z pendrive”** → wskaż `.env` → **OK**.
-   (Jeśli w `.env` nie ma tokena GitHub, skrypt poprosi o wklejenie go w czarnym oknie.)
 4. Dalej samo: pobranie kodu z GitHuba, Node.js, instalacja bibliotek, budowanie aplikacji.
 5. Na końcu: **GOTOWE!** i skrót **„Wiola Helper”** na pulpicie oraz w Menu Start.
-6. Wyjmij pendrive — `.env` jest już skopiowany do `C:\kreisel\system\.env`. Rozpakowany folder z ZIP-a można usunąć.
+6. Wyjmij pendrive — `.env` jest już skopiowany do `C:\kreisel\system\.env`. Rozpakowany folder można usunąć.
 
 Na komputerze, na którym Wiola Helper **już działa**, nie instaluj od nowa — użyj aktualizacji (punkt 4).
 Instalator nadpisałby `.env` wersją z pendrive i trzeba by ponownie logować się do QuickBooks.
 
 ## 4. Aktualizacja istniejącej instalacji (ok. 2–5 min)
-
-### Jednorazowo: instalacje sprzed 30.09.2026 (np. obecny komputer Wioli)
-
-Repozytorium jest teraz prywatne, a stary skrypt aktualizacji nie zna tokena, więc raz trzeba go podmienić:
-
-1. Zamknij Wiola Helper.
-2. Skopiuj `update_wiola.ps1` (z ZIP-a albo pendrive'a) do `C:\kreisel\` (zastąp istniejący plik).
-3. Dwuklik `C:\kreisel\update_wiola.cmd`.
-4. Skrypt zapyta o **token GitHub** → wklej go (linijka `GITHUB_TOKEN=` z `.env` na pendrive, bez `GITHUB_TOKEN=`)
-   → Enter. Token zapisze się w `C:\kreisel\system\.env`.
-5. Po aktualizacji aplikacja uruchomi się sama. Od teraz działają zwykłe aktualizacje (niżej).
-
-### Kolejne aktualizacje
 
 Dowolny z dwóch sposobów:
 
@@ -78,10 +62,8 @@ Dowolny z dwóch sposobów:
 Aktualizacja pobiera najnowszy kod z gałęzi `main`, przebudowuje aplikację i **zachowuje** `.env`,
 `magemar.xlsx`, historię faktur, foldery robocze i Node.js.
 
-### Gdy token GitHub wygaśnie
-
-„Sprawdź aktualizacje” pokaże *„GitHub 401/404 — brak dostępu do repozytorium”*. Patryk da nowy token →
-Ustawienia → **🔑 Token GitHub** → wklej → **Zapisz** (u góry ekranu).
+> Gdyby repozytorium GitHub zostało kiedyś ustawione jako prywatne: instalator i aktualizacja poproszą
+> o **token GitHub** (dostaniesz go od Patryka), a w aplikacji wpisuje się go w Ustawienia → **🔑 Token GitHub**.
 
 ## 5. Uruchamianie
 
@@ -129,8 +111,8 @@ Tokeny QuickBooks wygasają po ok. 100 dniach nieużywania — wtedy powtórz pu
 
 | Objaw | Co zrobić |
 |---|---|
-| Instalator / aktualizacja: „GitHub odrzucil token (HTTP 401/404)” | Token GitHub wygasł albo jest błędny — poproś Patryka o nowy (instalacja: nowy `.env`; aktualizacja: Ustawienia → 🔑 Token GitHub). |
-| Instalator: „Nie udalo sie pobrac z GitHub” (inny błąd) / npm install failed | Sprawdź internet / proxy / firewall dla adresów z punktu 1 i uruchom ponownie. |
+| Instalator: „Nie udalo sie pobrac z GitHub” / npm install failed | Sprawdź internet / proxy / firewall dla adresów z punktu 1 i uruchom ponownie. |
+| „GitHub nie wpuszcza bez tokena” / „GitHub odrzucil token (HTTP 401/404)” | Repozytorium jest prywatne albo token wygasł — poproś Patryka o token (aplikacja: Ustawienia → 🔑 Token GitHub). |
 | Instalator: „Build sie nie powiodl” | Uruchom ponownie `setup_wiola.cmd`; jeśli się powtarza — zrzut ekranu do Patryka. |
 | Aplikacja: czerwone QBO w pasku stanu / „Token QBO wygasł” | Ustawienia → Logowanie do QBO → zaloguj EWI Pro i EWI Store ponownie. |
 | Błędy MySQL / „ECONNREFUSED” / timeout | Komputer nie widzi serwera MySQL — sprawdź sieć firmową lub VPN. |

@@ -51,7 +51,7 @@ MYSQL_USER=pbaranai
 MYSQL_PASSWORD='{q$xxxxxxxxxxxx}'
 
 # ═══════════════════════════════════════════════════
-# GitHub (repo prywatne — instalacja i aktualizacje)
+# GitHub — tylko gdy repo jest prywatne (instalacja i aktualizacje)
 # ═══════════════════════════════════════════════════
 
 GITHUB_TOKEN=github_pat_...
@@ -121,13 +121,13 @@ GITHUB_TOKEN=github_pat_...
 - Bez quotes: dotenv może próbować expand `$abc` jako zmienną → broken connection
 
 ### `GITHUB_TOKEN`
-- **Po co**: repo `tryk016/wiola-helper` jest prywatne — `setup_wiola.ps1`, `update_wiola.ps1` i sprawdzanie aktualizacji w aplikacji pobierają kod z GitHub API z tym tokenem. Bez niego: 404
+- **Po co**: opcjonalny. Gdy repo `tryk016/wiola-helper` jest prywatne, `setup_wiola.ps1`, `update_wiola.ps1` i sprawdzanie aktualizacji w aplikacji pobierają kod z GitHub API z tym tokenem (bez niego: 404). Publiczne repo — zostaw puste
 - **Format**: `github_pat_` + ~80 znaków (fine-grained personal access token)
 - **Skąd brać**: GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token:
   - Repository access: **Only select repositories** → `tryk016/wiola-helper`
   - Repository permissions: **Contents: Read-only** (Metadata: Read-only dodaje się sam)
   - Expiration: np. 1 rok — wpisz sobie przypomnienie
-- **Zmiana**: w aplikacji Ustawienia → **🔑 Token GitHub** (zapisuje do `.env`), albo `update_wiola.cmd` zapyta, gdy go brak
+- **Zmiana**: w aplikacji Ustawienia → **🔑 Token GitHub** (zapisuje do `.env`), albo instalator / `update_wiola.cmd` zapyta o niego, gdy GitHub odmówi dostępu
 - **Wygasł**: w aplikacji „Sprawdź aktualizacje” pokaże „GitHub 401/404 — brak dostępu do repozytorium”
 
 ---

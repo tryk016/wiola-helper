@@ -16,10 +16,9 @@ Lista wszystkich znaczących zmian, od początku projektu.
 - Tylko tworzenie: istniejące produkty w Store nie są zmieniane; duplikaty nazw pomijane
 - Logika w `system/qbo_items_sync.js` + testy `node --test qbo_items_sync.test.js`
 
-### 🔑 Prywatne repo — instalacja i aktualizacje z tokenem GitHub
-- Repo `tryk016/wiola-helper` jest prywatne → `setup_wiola.ps1`, `update_wiola.ps1` i „Sprawdź aktualizacje” pobierają przez GitHub API z `GITHUB_TOKEN` z `.env`
-- `setup_wiola.ps1`: wybór `.env` przeniesiony na krok 2 (przed pobraniem kodu); brak tokena → prośba o wklejenie
-- `update_wiola.ps1`: brak tokena → prośba o wklejenie + zapis do `.env` (jednorazowa podmiana skryptu na starych instalacjach)
+### 🔑 Instalacja i aktualizacje gotowe na prywatne repo (opcjonalny token GitHub)
+- `setup_wiola.ps1`, `update_wiola.ps1` i „Sprawdź aktualizacje” pobierają przez GitHub API. Publiczne repo — bez tokena; gdy GitHub odmówi (repo prywatne), skrypty proszą o `GITHUB_TOKEN`, zapisują go w `.env` i ponawiają
+- `setup_wiola.ps1`: wybór `.env` przeniesiony na krok 2 (przed pobraniem kodu)
 - Ustawienia: nowa sekcja **🔑 Token GitHub**; czytelne komunikaty przy 401/404
 - Nowa instrukcja `INSTRUKCJA_IT.md`, zaktualizowane `PENDRIVE_INSTRUKCJA.txt`, `docs/installation.md`, `docs/env-config.md`
 
