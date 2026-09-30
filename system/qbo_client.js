@@ -83,7 +83,7 @@ async function getClient(which) {
   const realmId = process.env[realmKey];
   if (!realmId) throw new Error(`${realmKey} missing in .env`);
   const refreshToken = process.env[refreshKey];
-  if (!refreshToken) throw new Error(`${refreshKey} missing in .env — run qbo_oauth_helper.js ${name}`);
+  if (!refreshToken) throw new Error(`${refreshKey} missing in .env — log in via Wiola Helper → Ustawienia → Logowanie do QBO (${name})`);
 
   let entry = _cache[name];
   if (!entry || entry.expires_at < Date.now() + 60_000) {

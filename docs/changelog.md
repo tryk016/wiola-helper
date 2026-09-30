@@ -22,6 +22,12 @@ Lista wszystkich znaczących zmian, od początku projektu.
 - Ustawienia: nowa sekcja **🔑 Token GitHub**; czytelne komunikaty przy 401/404
 - Nowa instrukcja `INSTRUKCJA_IT.md`, zaktualizowane `PENDRIVE_INSTRUKCJA.txt`, `docs/installation.md`, `docs/env-config.md`
 
+### 🧹 Sprzątanie
+- Usunięty stary tryb bez okna: `1_INSTALACJA…cmd`, `2_Sprawdz…cmd`, `3_Procesuj…cmd`, `INSTRUKCJA.txt`, `process_inbox.js` + parser OCR/regex (`parse_kreisel_pl.js`, `ocr_pdf.js`, `extract_pdf_image.js`, `parse_kreisel_ocr.js`)
+- Usunięte jednorazowe skrypty z fazy sandbox (`qbo_setup_*`, `qbo_inspect*`, `qbo_post_kreisel`, `qbo_oauth_helper`, `migrate_env`, `reconcile`, `dump_*`, …) i stare notatki (`NOTES`, `PHASE0_REPORT`, `PRODUCTION_MIGRATION`, `SETUP`)
+- Usunięte `fix_shortcut.cmd` (skróty odbudowuje `update_wiola`) i `make_portable.cmd`
+- Nieużywane biblioteki: `tesseract.js`, `node-quickbooks`, `intuit-oauth`
+
 ## Czerwiec 2026
 
 ### 🚀 Hybrid parser + double-parse elimination

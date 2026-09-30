@@ -70,7 +70,7 @@ layout: default
 
 ### `system/` — Pure Node logic
 
-Wykorzystywane także przez stare CLI workflowy (`process_inbox.js`, `qbo_post_kreisel.js`). Wiola Helper require()-uje moduły, nie kopiuje kodu.
+Wiola Helper require()-uje moduły (`src/main/system-modules.ts`), nie kopiuje kodu. Część skryptów da się też uruchomić samodzielnie z `node` (np. `snapshot_products.js`).
 
 | Plik | Odpowiedzialność |
 |------|------------------|
@@ -231,7 +231,7 @@ Lokalizacje:
 
 ### Dlaczego require() do `C:\kreisel\system\` zamiast bundlowania?
 
-System code (parser, resolver, QBO) działa też w CLI mode (np. `node system/qbo_post_kreisel.js` jako Task Scheduler job, niezależnie od GUI). Współdzielony kod = jedna logika, jeden test surface. Bundlowanie do Electrona by oznaczało dwie kopie biznesowej logiki do utrzymania.
+System code (parser, resolver, QBO) to zwykłe moduły Node — da się je uruchamiać i testować bez Electrona (np. `node --test qbo_items_sync.test.js`). Jedna logika, jeden test surface. Bundlowanie do Electrona by oznaczało dwie kopie biznesowej logiki do utrzymania.
 
 ### Dlaczego nie electron-builder (NSIS installer)?
 

@@ -29,7 +29,7 @@ MYSQL_USER=pbaranai
 MYSQL_PASSWORD='<password>'
 ```
 
-Jeśli jeszcze nie migrowałeś — uruchom `node C:\kreisel\system\migrate_env.js`.
+Stary format (`QBO_CLIENT_ID` bez przyrostka) — zmień nazwy ręcznie, patrz [Konfiguracja .env](env-config.html).
 
 ### B) Intuit Developer
 
@@ -209,7 +209,7 @@ Pokaż wszystkie scenariusze z [Instrukcja dla Wioli](user-guide.html):
 |---------|-------------|
 | `setup_wiola.cmd` umiera w trakcie | Sprawdź internet, uruchom ponownie (idempotentny) |
 | Browser blokuje `.cmd` | "Zachowaj mimo to" w SmartScreen |
-| Skrót pulpitu pokazuje konsolę | Uruchom `C:\kreisel\update_wiola.cmd` (odbudowuje skróty) albo `C:\kreisel\fix_shortcut.cmd` |
+| Skrót pulpitu pokazuje konsolę | Uruchom `C:\kreisel\update_wiola.cmd` (odbudowuje skróty) |
 | OAuth: "redirect_uri mismatch" | Sprawdź Intuit Production redirect = `https://tryk016.github.io/wiola-helper/oauth-callback.html` |
 | OAuth: niezalogowanie | Wiola loguje się prawdziwym EWI kontem (nie sandbox) |
 | Faktura wisi `parsing` | Restart aplikacji (auto-reset hung statuses) |

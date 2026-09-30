@@ -19,13 +19,8 @@ layout: default
 
 ### Skrót pulpitu pokazuje czarną konsolę
 
-Stary instalator (commit `50cbb92`) tworzył skrót do `.cmd` zamiast bezpośrednio do `electron.exe`. Pobierz i uruchom:
-
-```
-https://raw.githubusercontent.com/tryk016/wiola-helper/main/fix_shortcut.cmd
-```
-
-Skrypt usuwa stare skróty i tworzy nowe wskazujące bezpośrednio na `electron.exe` (bez CMD wrappera).
+Stary instalator (commit `50cbb92`) tworzył skrót do `.cmd` zamiast bezpośrednio do `electron.exe`. Uruchom `C:\kreisel\update_wiola.cmd` —
+na końcu usuwa stare skróty i tworzy nowe wskazujące bezpośrednio na `electron.exe` (bez CMD wrappera).
 
 ---
 
@@ -44,13 +39,7 @@ Production wymaga HTTPS, sandbox akceptuje HTTP. Sprawdź zakładkę:
 
 ### "Brak QBO_CLIENT_ID_PRODUCTION w .env" w aplikacji
 
-Po migracji do dual-credentials musisz mieć obie pary kluczy. Uruchom:
-
-```powershell
-node C:\kreisel\system\migrate_env.js
-```
-
-Albo dodaj ręcznie w `.env`:
+Po migracji do dual-credentials musisz mieć obie pary kluczy. Dodaj ręcznie w `.env` (albo w aplikacji: Ustawienia → QBO Credentials):
 ```
 QBO_CLIENT_ID_SANDBOX=...
 QBO_CLIENT_SECRET_SANDBOX=...

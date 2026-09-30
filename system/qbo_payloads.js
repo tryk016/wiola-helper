@@ -10,7 +10,7 @@
 //   • Tax code: PVA Import 20.0% if exists, else fallback to 20.0% S (sandbox)
 //   • SalesTermRef = Net 90
 //   • Empty memos
-//   • Items resolved per SKU (created via qbo_setup_skus.js)
+//   • Items resolved per SKU (missing ones auto-created — see createMissingItem)
 
 const { roundHalfUp, rateDecimalPlaces } = require('./math');
 

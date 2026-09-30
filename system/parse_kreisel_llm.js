@@ -1,5 +1,5 @@
 // LLM parser for Kreisel invoices — Anthropic Claude with vision/PDF.
-// Drop-in replacement for parse_kreisel_pl.js (same output structure).
+// Replaced the old Tesseract+regex parser (parse_kreisel_pl.js, since removed).
 //
 // Advantages over Tesseract+regex:
 //   • Handles multi-line descriptions natively
@@ -290,7 +290,7 @@ async function parseKreiselWithLlm(pdfPath) {
     console.error('[parse_kreisel_llm] Rejected non-product lines:', JSON.stringify(rejected));
   }
 
-  // Compute lines into our canonical shape (same as parse_kreisel_pl.js output)
+  // Compute lines into our canonical shape
   const lines = (data.lines || []).filter(l => l.ewi_sku !== null).map(l => ({
     nr: l.nr,        // invoice line position — used to keep original order
     ewi_sku: l.ewi_sku,

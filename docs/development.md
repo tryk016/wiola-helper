@@ -69,21 +69,6 @@ W production mode:
 - `Menu.setApplicationMenu(null)` (no File/Edit/View/Window/Help bar)
 - belt-and-braces `webContents.on('devtools-opened', closeDevTools)`
 
-## Build portable distributable
-
-`make_portable.cmd` w `wiola-helper/`:
-```powershell
-cd C:\kreisel\wiola-helper
-.\make_portable.cmd
-```
-
-Output: `C:\kreisel\WiolaHelper-portable.zip` z:
-- `wiola-helper\` (dist + dist-electron + node_modules)
-- `system\` (cały folder)
-- `Wiola Helper.cmd` (launcher)
-
-Można rozpakować na dowolnej maszynie z Node — wymaga ręcznego setup `.env`.
-
 ## Code structure
 
 ### Główny entry point Electron

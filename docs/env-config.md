@@ -79,7 +79,7 @@ GITHUB_TOKEN=github_pat_...
 ### `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` (legacy)
 - **Status**: deprecated, ale działa jako fallback
 - **Kiedy używane**: gdy `QBO_CLIENT_ID_{ENV}` jest pusty
-- **Migracja**: uruchom `node C:\kreisel\system\migrate_env.js`
+- **Migracja**: zmień ręcznie nazwy w `.env` na `QBO_CLIENT_ID_SANDBOX` / `_PRODUCTION` (patrz niżej)
 
 ### `QBO_EWIPRO_REALM_ID` / `QBO_EWISTORE_REALM_ID`
 - **Format**: 15-16 cyfr (np. `9341452840843752`)
@@ -169,19 +169,9 @@ Sprawdza tylko czy dotenv parsuje plik bez błędu.
 
 ### Z single-pair credentials (pre-dual env)
 
-Uruchom:
-```powershell
-node C:\kreisel\system\migrate_env.js
-```
-
-Skrypt:
-1. Backup `.env.backup-<timestamp>`
-2. Pyta o potwierdzenie
-3. Przepisuje `QBO_CLIENT_ID` → `QBO_CLIENT_ID_PRODUCTION` (jeśli `QBO_ENV=production`) lub `_SANDBOX` (inaczej)
-4. Dodaje puste `*_OTHER_ENV` placeholdery
-5. Zachowuje komentarze i resztę kluczy
-
-Po migracji wpisz brakujące keys dla drugiego environment.
+Stare `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` nadal działają jako fallback. Żeby przejść na nowy format, w `.env` zmień nazwy na
+`QBO_CLIENT_ID_PRODUCTION` / `QBO_CLIENT_SECRET_PRODUCTION` (jeśli `QBO_ENV=production`) albo `_SANDBOX` (inaczej)
+i dopisz parę dla drugiego środowiska (albo wpisz je w aplikacji: Ustawienia → QBO Credentials).
 
 ---
 
