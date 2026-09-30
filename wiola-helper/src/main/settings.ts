@@ -47,6 +47,8 @@ export interface EnvVars {
   MYSQL_DB: string;
   MYSQL_USER: string;
   MYSQL_PASSWORD: string;
+  // Read-only token for the private GitHub repo (in-app update check + update script)
+  GITHUB_TOKEN: string;
 }
 
 export function readEnv(): Partial<EnvVars> {
@@ -93,6 +95,7 @@ export function maskedEnv(): Partial<EnvVars> {
     QBO_EWISTORE_REFRESH_TOKEN: mask(e.QBO_EWISTORE_REFRESH_TOKEN),
     ANTHROPIC_API_KEY: mask(e.ANTHROPIC_API_KEY),
     MYSQL_PASSWORD: mask(e.MYSQL_PASSWORD),
+    GITHUB_TOKEN: mask(e.GITHUB_TOKEN),
   };
 }
 

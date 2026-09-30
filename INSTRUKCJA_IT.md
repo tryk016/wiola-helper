@@ -3,7 +3,9 @@
 Jak pobrać, zainstalować, zaktualizować i uruchomić Wiola Helper na komputerze z Windows.
 
 Wiola Helper to aplikacja okienkowa (Electron) do księgowania faktur Kreisel w QuickBooks Online
-(EWI Pro + EWI Store). Kod jest w tym repozytorium; na komputerze wszystko ląduje w `C:\kreisel\`.
+(EWI Pro + EWI Store). Kod jest w **prywatnym** repozytorium GitHub `tryk016/wiola-helper` —
+instalator pobiera go sam, tokenem zapisanym w pliku `.env`, więc **konto GitHub nie jest potrzebne**.
+Na komputerze wszystko ląduje w `C:\kreisel\`.
 
 ---
 
@@ -11,38 +13,55 @@ Wiola Helper to aplikacja okienkowa (Electron) do księgowania faktur Kreisel w 
 
 - Windows 10 lub 11, konto zwykłego użytkownika (**admin niepotrzebny**).
 - Ok. 1 GB wolnego miejsca na dysku `C:`.
-- Internet z dostępem do: `github.com`, `api.github.com`, `nodejs.org`, `registry.npmjs.org`,
+- Internet z dostępem do: `api.github.com`, `codeload.github.com`, `nodejs.org`, `registry.npmjs.org`,
   `*.intuit.com`, `api.anthropic.com`.
 - Dostęp do firmowego serwera MySQL (port 3306, adres jest w pliku `.env`) — z sieci biurowej lub przez VPN.
 - Node.js **nie** musi być zainstalowany — instalator pobiera własną, przenośną wersję do `C:\kreisel\nodejs\`.
 
 ## 2. Co dostajesz od Patryka
 
-- Plik **`.env`** (na pendrive). Zawiera klucze API i hasła — **nie wysyłaj go mailem, nie wrzucaj do chmury
-  ani do repozytorium**. Po instalacji oddaj pendrive.
-- Loginy do QuickBooks Online (EWI Pro i EWI Store) dla osoby, która będzie korzystać z aplikacji.
+Pendrive z plikami:
+
+| Plik | Po co |
+|---|---|
+| `.env` | klucze API, hasła i token GitHub (`GITHUB_TOKEN=...`) — **poufny** |
+| `setup_wiola.cmd` + `setup_wiola.ps1` | instalator (muszą leżeć obok siebie) |
+| `update_wiola.ps1` | do jednorazowej podmiany na starszych instalacjach (punkt 4) |
+
+Plus loginy do QuickBooks Online (EWI Pro i EWI Store) dla osoby, która będzie korzystać z aplikacji.
+
+`.env` **nie wysyłaj mailem, nie wrzucaj do chmury ani do repozytorium**. Po instalacji oddaj pendrive.
 
 ---
 
 ## 3. Pierwsza instalacja (nowy komputer, ok. 10 min)
 
-1. Włóż pendrive z plikiem `.env`.
-2. Otwórz <https://github.com/tryk016/wiola-helper> → zielony przycisk **Code → Download ZIP**.
-3. Rozpakuj ZIP gdziekolwiek (np. do *Pobrane*) — **nie** do `C:\kreisel`.
-   Potrzebne są dwa pliki leżące obok siebie: `setup_wiola.cmd` i `setup_wiola.ps1`
-   (sam `setup_wiola.cmd` bez `.ps1` nie zadziała).
-4. W rozpakowanym folderze kliknij prawym na `setup_wiola.cmd` → **Otwórz**
+1. Włóż pendrive.
+2. Na pendrive kliknij prawym na `setup_wiola.cmd` → **Otwórz**
    (jeśli SmartScreen ostrzeże → *Więcej informacji → Uruchom mimo to*).
-   Skrypt sam pobierze aktualny kod do `C:\kreisel\`; rozpakowany folder można potem usunąć.
-5. Czarne okno przejdzie przez 9 kroków: pobranie kodu z GitHuba, Node.js, instalacja bibliotek, budowanie aplikacji.
-6. W kroku 7 pojawi się okno **„Wybierz plik .env z pendrive”** → wskaż `.env` na pendrive → **OK**.
-7. Na końcu: **GOTOWE!** i skrót **„Wiola Helper”** na pulpicie oraz w Menu Start.
-8. Wyjmij pendrive — `.env` jest już skopiowany do `C:\kreisel\system\.env`.
+3. Krok 2 z 9: okno **„Wybierz plik .env z pendrive”** → wskaż `.env` na pendrive → **OK**.
+   (Jeśli w `.env` nie ma tokena GitHub, skrypt poprosi o wklejenie go w czarnym oknie.)
+4. Dalej samo: pobranie kodu z GitHuba, Node.js, instalacja bibliotek, budowanie aplikacji.
+5. Na końcu: **GOTOWE!** i skrót **„Wiola Helper”** na pulpicie oraz w Menu Start.
+6. Wyjmij pendrive — `.env` jest już skopiowany do `C:\kreisel\system\.env`.
 
-Jeśli w `C:\kreisel\system` jest już stara instalacja, skrypt zapyta, czy nadpisać (`t` = tak).
-Plik `.env` i `magemar.xlsx` zostaną zachowane.
+Na komputerze, na którym Wiola Helper **już działa**, nie instaluj od nowa — użyj aktualizacji (punkt 4).
+Instalator nadpisałby `.env` wersją z pendrive i trzeba by ponownie logować się do QuickBooks.
 
 ## 4. Aktualizacja istniejącej instalacji (ok. 2–5 min)
+
+### Jednorazowo: instalacje sprzed 30.09.2026 (np. obecny komputer Wioli)
+
+Repozytorium jest teraz prywatne, a stary skrypt aktualizacji nie zna tokena, więc raz trzeba go podmienić:
+
+1. Zamknij Wiola Helper.
+2. Skopiuj `update_wiola.ps1` z pendrive do `C:\kreisel\` (zastąp istniejący plik).
+3. Dwuklik `C:\kreisel\update_wiola.cmd`.
+4. Skrypt zapyta o **token GitHub** → wklej go (linijka `GITHUB_TOKEN=` z `.env` na pendrive, bez `GITHUB_TOKEN=`)
+   → Enter. Token zapisze się w `C:\kreisel\system\.env`.
+5. Po aktualizacji aplikacja uruchomi się sama. Od teraz działają zwykłe aktualizacje (niżej).
+
+### Kolejne aktualizacje
 
 Dowolny z dwóch sposobów:
 
@@ -52,6 +71,11 @@ Dowolny z dwóch sposobów:
 
 Aktualizacja pobiera najnowszy kod z gałęzi `main`, przebudowuje aplikację i **zachowuje** `.env`,
 `magemar.xlsx`, historię faktur, foldery robocze i Node.js.
+
+### Gdy token GitHub wygaśnie
+
+„Sprawdź aktualizacje” pokaże *„GitHub 401/404 — brak dostępu do repozytorium”*. Patryk da nowy token →
+Ustawienia → **🔑 Token GitHub** → wklej → **Zapisz** (u góry ekranu).
 
 ## 5. Uruchamianie
 
@@ -99,7 +123,8 @@ Tokeny QuickBooks wygasają po ok. 100 dniach nieużywania — wtedy powtórz pu
 
 | Objaw | Co zrobić |
 |---|---|
-| Instalator: „Nie udalo sie pobrac z GitHub” / npm install failed | Sprawdź internet / proxy / firewall dla adresów z punktu 1 i uruchom ponownie. |
+| Instalator / aktualizacja: „GitHub odrzucil token (HTTP 401/404)” | Token GitHub wygasł albo jest błędny — poproś Patryka o nowy (instalacja: nowy `.env`; aktualizacja: Ustawienia → 🔑 Token GitHub). |
+| Instalator: „Nie udalo sie pobrac z GitHub” (inny błąd) / npm install failed | Sprawdź internet / proxy / firewall dla adresów z punktu 1 i uruchom ponownie. |
 | Instalator: „Build sie nie powiodl” | Uruchom ponownie `setup_wiola.cmd`; jeśli się powtarza — zrzut ekranu do Patryka. |
 | Aplikacja: czerwone QBO w pasku stanu / „Token QBO wygasł” | Ustawienia → Logowanie do QBO → zaloguj EWI Pro i EWI Store ponownie. |
 | Błędy MySQL / „ECONNREFUSED” / timeout | Komputer nie widzi serwera MySQL — sprawdź sieć firmową lub VPN. |

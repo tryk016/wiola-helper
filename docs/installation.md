@@ -58,6 +58,13 @@ QBO_EWISTORE_REFRESH_TOKEN=
 
 Resztę (Client ID/Secret dla obu envs, ANTHROPIC, MYSQL) zostaw bez zmian.
 
+**3.** Dopisz token GitHub (repo jest prywatne — bez niego instalator nie pobierze kodu; jak go zrobić: [Konfiguracja .env → `GITHUB_TOKEN`](env-config.html)):
+```
+GITHUB_TOKEN=github_pat_...
+```
+
+**4.** Skopiuj na pendrive z `C:\kreisel\`: `setup_wiola.cmd`, `setup_wiola.ps1` (muszą leżeć obok siebie), `update_wiola.ps1`, `INSTRUKCJA_IT.md`.
+
 ### D) Zapisz osobno (nie na pendrive!)
 
 - Login + hasło Wioli do **produkcyjnego** QBO EWI Pro
@@ -69,33 +76,28 @@ Resztę (Client ID/Secret dla obu envs, ANTHROPIC, MYSQL) zostaw bez zmian.
 
 **1.** Wiola wkłada pendrive.
 
-**2.** Otwiera przeglądarkę → wpisuje:
-```
-https://raw.githubusercontent.com/tryk016/wiola-helper/main/setup_wiola.cmd
-```
-Strona pokaże tekst. **Ctrl+S** → zapisz `setup_wiola.cmd` na pulpit.
+**2.** Na pendrive: **prawym na `setup_wiola.cmd` → "Otwórz"** (admin nie potrzebny). Akceptuje SmartScreen jeśli wyskoczy.
 
-**3.** **Prawym na pliku → "Uruchom"** (admin nie potrzebny).
-
-**4.** Akceptuje SmartScreen / UAC jeśli wyskoczy. Czarne okno postępu:
+**3.** Czarne okno:
 ```
 [1/9] Tworzenie folderu C:\kreisel        OK
-[2/9] Pobieranie kodu z GitHub            OK  (~5 MB)
-[3/9] Pobieranie Node.js v22.11.0         OK  (~30 MB)
-[4/9] Instalacja zaleznosci system        OK  (~30s)
-[5/9] Instalacja zaleznosci GUI           OK  (~2 min)
-[6/9] Budowanie aplikacji                 OK
-[7/9] Wskaz plik .env z pendrive ⬅
+[2/9] Wskaz plik .env z pendrive ⬅
 ```
 
-**5.** Wyskakuje **okno wyboru pliku** "Wybierz plik .env z pendrive":
+**4.** Wyskakuje **okno wyboru pliku** "Wybierz plik .env z pendrive":
 - Klik pendrive (F: lub inna litera)
 - Wybierz **.env**
 - Klik **OK**
 
-**6.** Dokończenie:
+(Brak `GITHUB_TOKEN` w `.env` → skrypt poprosi o wklejenie tokena.)
+
+**5.** Dokończenie:
 ```
-[7/9] Skopiowano .env                     OK
+[3/9] Pobieranie kodu z GitHub            OK  (z tokenem)
+[4/9] Pobieranie Node.js v22.11.0         OK  (~30 MB)
+[5/9] Instalacja zaleznosci system        OK  (~30s)
+[6/9] Instalacja zaleznosci GUI           OK  (~2 min)
+[7/9] Budowanie aplikacji                 OK
 [8/9] Tworzenie folderow roboczych        OK
 [9/9] Tworzenie skrotow (pulpit + Menu)   OK
 
@@ -103,7 +105,7 @@ Strona pokaże tekst. **Ctrl+S** → zapisz `setup_wiola.cmd` na pulpit.
    Skrot: Pulpit → Wiola Helper
 ```
 
-**7.** Wiola **wyjmuje pendrive i oddaje Tobie** — `.env` jest już w `C:\kreisel\system\.env`.
+**6.** Wiola **wyjmuje pendrive i oddaje Tobie** — `.env` jest już w `C:\kreisel\system\.env`.
 
 ---
 
@@ -207,7 +209,7 @@ Pokaż wszystkie scenariusze z [Instrukcja dla Wioli](user-guide.html):
 |---------|-------------|
 | `setup_wiola.cmd` umiera w trakcie | Sprawdź internet, uruchom ponownie (idempotentny) |
 | Browser blokuje `.cmd` | "Zachowaj mimo to" w SmartScreen |
-| Skrót pulpitu pokazuje konsolę | Pobierz [`fix_shortcut.cmd`](https://raw.githubusercontent.com/tryk016/wiola-helper/main/fix_shortcut.cmd) → Uruchom |
+| Skrót pulpitu pokazuje konsolę | Uruchom `C:\kreisel\update_wiola.cmd` (odbudowuje skróty) albo `C:\kreisel\fix_shortcut.cmd` |
 | OAuth: "redirect_uri mismatch" | Sprawdź Intuit Production redirect = `https://tryk016.github.io/wiola-helper/oauth-callback.html` |
 | OAuth: niezalogowanie | Wiola loguje się prawdziwym EWI kontem (nie sandbox) |
 | Faktura wisi `parsing` | Restart aplikacji (auto-reset hung statuses) |
@@ -258,9 +260,11 @@ Aplikacja zamknie się, ~2 min w tle (download + npm install + Vite build), sama
 cd C:\kreisel
 .\update_wiola.cmd
 ```
-albo pobierz z https://raw.githubusercontent.com/tryk016/wiola-helper/main/update_wiola.cmd jeśli go nie ma.
-
 Skrypt zachowuje `.env`, `magemar.xlsx`, foldery robocze, state.
+
+Repo jest prywatne: aktualizacja potrzebuje `GITHUB_TOKEN` w `.env`. Instalacje sprzed 30.09.2026 mają stary
+`update_wiola.ps1` bez obsługi tokena — raz podmień go z pendrive'a i uruchom `update_wiola.cmd` (zapyta o token).
+Szczegóły: `INSTRUKCJA_IT.md`, punkt 4.
 
 ---
 

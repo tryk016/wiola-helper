@@ -4,37 +4,47 @@
 
 CO ROBISZ TY (Patryk):
 
+ 0. Token GitHub (repo tryk016/wiola-helper jest PRYWATNE — bez tokena
+    instalacja i aktualizacje nie pobiora kodu). Raz na rok:
+      github.com → Settings → Developer settings → Personal access tokens
+      → Fine-grained tokens → Generate new token
+        - Repository access: Only select repositories → tryk016/wiola-helper
+        - Repository permissions: Contents = Read-only
+        - Expiration: np. 1 rok (wpisz sobie przypomnienie)
+      Skopiuj token (github_pat_...).
+
  1. Skopiuj swoj plik:
       ZRODLO:  C:\kreisel\system\.env
       NA:      <litera pendrive>:\.env   (np. F:\.env)
+    i dopisz w nim linijke:
+      GITHUB_TOKEN=github_pat_...
 
-    UWAGA: ten plik zawiera PRODUCTION tokeny QBO i klucz Anthropic.
-           Trzymaj pendrive bezpiecznie po instalacji.
+    UWAGA: ten plik zawiera PRODUCTION tokeny QBO, klucz Anthropic
+           i token GitHub. Trzymaj pendrive bezpiecznie po instalacji.
 
- 2. Dodatkowo na pendrive moze byc plik:
+ 2. Skopiuj na pendrive (obok .env) z C:\kreisel\:
+      setup_wiola.cmd
+      setup_wiola.ps1
+      update_wiola.ps1    (do jednorazowej podmiany na starych instalacjach)
+      INSTRUKCJA_IT.md    (instrukcja dla informatyka)
+
+ 3. Dodatkowo na pendrive moze byc plik:
       magemar.xlsx  (opcjonalnie, mozna pominac — Wiola sciagnie z SharePoint)
 
-CO ROBI WIOLA NA SWOIM KOMPUTERZE:
+CO ROBI WIOLA / INFORMATYK NA KOMPUTERZE (szczegoly: INSTRUKCJA_IT.md):
 
- 1. Wlozysz pendrive do swojego PC.
+ 1. Wklada pendrive.
 
- 2. Otwierasz przegladarke i wchodzisz na:
-      https://github.com/tryk016/wiola-helper
+ 2. Na pendrive: prawym na setup_wiola.cmd → "Otworz".
 
- 3. Klikasz zielony przycisk "Code" → "Download ZIP"
-      LUB pobierasz tylko pojedynczy plik:
-      https://raw.githubusercontent.com/tryk016/wiola-helper/main/setup_wiola.cmd
+ 3. Okienko "Wybierz plik .env z pendrive" — pendrive (np. F:\)
+    → .env → OK.
 
- 4. Klikasz prawym na setup_wiola.cmd → "Uruchom".
+ 4. Czarne okno — 5-10 min, sciaga kod z GitHub (z tokenem) i Node.js.
 
- 5. Pojawi sie czarne okno — czeka 5-10 min, sciaga Node.js + kod.
+ 5. Po zakonczeniu na pulpicie pojawia sie skrot "Wiola Helper".
 
- 6. W trakcie pojawi sie okienko "Wybierz plik .env z pendrive" —
-    klikasz pendrive (np. F:\) → wybierasz .env → OK.
-
- 7. Po zakonczeniu na pulpicie pojawia sie skrot "Wiola Helper".
-
- 8. Pendrive WYJMIJ i przekaz Patrykowi z powrotem.
+ 6. Pendrive WYJMIJ i przekaz Patrykowi z powrotem.
     (.env zostal juz skopiowany w bezpieczne miejsce na PC.)
 
 ============================================================

@@ -16,12 +16,14 @@
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 $ROOT          = 'C:\kreisel'
 $REPO_USER     = 'tryk016'
 $REPO_NAME     = 'wiola-helper'
 $REPO_BRANCH   = 'main'
-$REPO_ZIP_URL  = "https://github.com/$REPO_USER/$REPO_NAME/archive/refs/heads/$REPO_BRANCH.zip"
+# API zipball (not github.com/archive) — it accepts a token for the private repo
+$REPO_ZIP_URL  = "https://api.github.com/repos/$REPO_USER/$REPO_NAME/zipball/$REPO_BRANCH"
 
 function Step($n, $total, $msg) {
     Write-Host ""
@@ -31,6 +33,27 @@ function Ok($msg)   { Write-Host "       OK  $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "       !!  $msg" -ForegroundColor Yellow }
 function Fail($msg) { Write-Host "       BLAD $msg" -ForegroundColor Red; throw $msg }
 
+# Value of KEY=... in a .env file (quotes stripped), '' if absent.
+function Get-EnvValue($path, $key) {
+    if (-not (Test-Path $path)) { return '' }
+    foreach ($line in Get-Content $path) {
+        if ($line -match "^\s*$key\s*=(.*)$") { return $Matches[1].Trim().Trim("'").Trim('"') }
+    }
+    return ''
+}
+function GitHubHeaders($token) {
+    @{ 'User-Agent' = 'WiolaHelper'; 'Accept' = 'application/vnd.github+json'; 'Authorization' = "Bearer $token" }
+}
+# Readable message for a failed GitHub request (private repo answers 404 without access).
+function GitHubError($err) {
+    $code = $null
+    try { $code = [int]$err.Exception.Response.StatusCode } catch { }
+    if ($code -in 401, 403, 404) {
+        return "GitHub odrzucil token (HTTP $code). Token wygasl albo nie ma dostepu do $REPO_USER/$REPO_NAME - wpisz nowy w Wiola Helper > Ustawienia > Token GitHub albo popros Patryka."
+    }
+    return $err.Exception.Message
+}
+
 # --- 0. sanity check -----------------------------------------------------
 if (-not (Test-Path "$ROOT\system" -PathType Container)) {
     Fail "Brak $ROOT\system - najpierw uruchom setup_wiola.cmd (pierwsza instalacja)."
@@ -39,6 +62,19 @@ if (-not (Test-Path "$ROOT\nodejs\node.exe")) {
     Fail "Brak Node.js w $ROOT\nodejs - uruchom najpierw setup_wiola.cmd."
 }
 $nodeDir = "$ROOT\nodejs"
+
+# The repo is private: the download needs GITHUB_TOKEN from .env. Older
+# installs don't have it yet — ask once and save it (only happens when run
+# by hand from update_wiola.cmd; the in-app update check needs the token too).
+$envPath  = "$ROOT\system\.env"
+$GH_TOKEN = Get-EnvValue $envPath 'GITHUB_TOKEN'
+if (-not $GH_TOKEN) {
+    Warn "W $envPath brak GITHUB_TOKEN (repozytorium jest prywatne)."
+    $GH_TOKEN = (Read-Host "Wklej token GitHub od Patryka i nacisnij Enter").Trim()
+    if (-not $GH_TOKEN) { Fail "Bez tokena GitHub nie da sie pobrac aktualizacji." }
+    Add-Content -Path $envPath -Value "`r`nGITHUB_TOKEN=$GH_TOKEN" -Encoding ASCII
+    Ok "Zapisano GITHUB_TOKEN w .env"
+}
 
 # --- 1. is Wiola Helper running? -----------------------------------------
 Step 1 6 "Sprawdzanie czy Wiola Helper jest zamknieta"
@@ -67,9 +103,9 @@ Step 3 6 "Pobieranie najnowszej wersji z GitHub"
 $repoZip = "$env:TEMP\wiola_update.zip"
 if (Test-Path $repoZip) { Remove-Item $repoZip -Force }
 try {
-    Invoke-WebRequest -Uri $REPO_ZIP_URL -OutFile $repoZip -UseBasicParsing
+    Invoke-WebRequest -Uri $REPO_ZIP_URL -Headers (GitHubHeaders $GH_TOKEN) -OutFile $repoZip -UseBasicParsing
 } catch {
-    Fail "Nie udalo sie pobrac z GitHub: $($_.Exception.Message)"
+    Fail "Nie udalo sie pobrac z GitHub: $(GitHubError $_)"
 }
 Ok "Pobrano $([math]::Round((Get-Item $repoZip).Length/1MB,1)) MB"
 
@@ -171,7 +207,7 @@ Ok "GUI zbudowane"
 # Record new commit SHA ONLY after a successful build, so .version never
 # claims "up to date" when the rebuild actually failed.
 try {
-    $commitInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/$REPO_BRANCH" -Headers @{ 'User-Agent' = 'WiolaHelper' } -TimeoutSec 10
+    $commitInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/$REPO_BRANCH" -Headers (GitHubHeaders $GH_TOKEN) -TimeoutSec 10
     Set-Content -Path "$ROOT\.version" -Value $commitInfo.sha -Encoding ASCII -NoNewline
     Ok "Wersja: $($commitInfo.sha.Substring(0,8))"
 } catch {

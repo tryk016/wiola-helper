@@ -3,12 +3,13 @@
 #
 # What this does (no admin needed):
 #   1. Creates C:\kreisel\ folder
-#   2. Downloads project ZIP from GitHub → extracts to C:\kreisel\
-#   3. Downloads portable Node.js 22 LTS → C:\kreisel\nodejs\
-#   4. Runs npm install in system\ and wiola-helper\
-#   5. Builds wiola-helper (Vite + tsc) → dist\, dist-electron\
-#   6. Opens file picker → user selects .env from USB stick
-#   7. Copies .env → C:\kreisel\system\.env
+#   2. Opens file picker → user selects .env from USB stick. The repo is
+#      private: .env must hold GITHUB_TOKEN (else the script asks for it)
+#   3. Downloads project ZIP from GitHub (with the token) → C:\kreisel\,
+#      puts .env → C:\kreisel\system\.env
+#   4. Downloads portable Node.js 22 LTS → C:\kreisel\nodejs\
+#   5-6. Runs npm install in system\ and wiola-helper\
+#   7. Builds wiola-helper (Vite + tsc) → dist\, dist-electron\
 #   8. Creates working folders: inbox, gotowe, bledy, wstrzymane
 #   9. Creates Desktop shortcut "Wiola Helper"
 #
@@ -17,6 +18,7 @@
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'   # faster Invoke-WebRequest
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 # --- config ---------------------------------------------------------------
 $ROOT          = 'C:\kreisel'
@@ -25,7 +27,8 @@ $REPO_NAME     = 'wiola-helper'
 $REPO_BRANCH   = 'main'
 $NODE_VERSION  = 'v22.11.0'
 $NODE_ZIP_URL  = "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-win-x64.zip"
-$REPO_ZIP_URL  = "https://github.com/$REPO_USER/$REPO_NAME/archive/refs/heads/$REPO_BRANCH.zip"
+# API zipball (not github.com/archive) — it accepts a token for the private repo
+$REPO_ZIP_URL  = "https://api.github.com/repos/$REPO_USER/$REPO_NAME/zipball/$REPO_BRANCH"
 
 # --- helpers --------------------------------------------------------------
 function Step($n, $total, $msg) {
@@ -35,6 +38,27 @@ function Step($n, $total, $msg) {
 function Ok($msg)   { Write-Host "       OK  $msg" -ForegroundColor Green }
 function Warn($msg) { Write-Host "       !!  $msg" -ForegroundColor Yellow }
 function Fail($msg) { Write-Host "       BLAD $msg" -ForegroundColor Red; throw $msg }
+
+# Value of KEY=... in a .env file (quotes stripped), '' if absent.
+function Get-EnvValue($path, $key) {
+    if (-not (Test-Path $path)) { return '' }
+    foreach ($line in Get-Content $path) {
+        if ($line -match "^\s*$key\s*=(.*)$") { return $Matches[1].Trim().Trim("'").Trim('"') }
+    }
+    return ''
+}
+function GitHubHeaders($token) {
+    @{ 'User-Agent' = 'WiolaHelper'; 'Accept' = 'application/vnd.github+json'; 'Authorization' = "Bearer $token" }
+}
+# Readable message for a failed GitHub request (private repo answers 404 without access).
+function GitHubError($err) {
+    $code = $null
+    try { $code = [int]$err.Exception.Response.StatusCode } catch { }
+    if ($code -in 401, 403, 404) {
+        return "GitHub odrzucil token (HTTP $code). Token wygasl albo nie ma dostepu do $REPO_USER/$REPO_NAME - popros Patryka o nowy."
+    }
+    return $err.Exception.Message
+}
 
 # --- 1. project folder ----------------------------------------------------
 Step 1 9 "Tworzenie folderu C:\kreisel"
@@ -52,13 +76,45 @@ if (Test-Path "$ROOT\system" -PathType Container) {
 if (-not (Test-Path $ROOT)) { New-Item -ItemType Directory -Path $ROOT | Out-Null }
 Ok "$ROOT"
 
-# --- 2. download project ZIP from GitHub ---------------------------------
-Step 2 9 "Pobieranie kodu z GitHub"
+# --- 2. .env from USB stick (needed first: it holds the GitHub token) ----
+Step 2 9 "Wskaz plik .env z pendrive"
+Add-Type -AssemblyName System.Windows.Forms
+$dlg = New-Object System.Windows.Forms.OpenFileDialog
+$dlg.Title  = 'Wybierz plik .env z pendrive (od Patryka)'
+$dlg.Filter = 'Plik .env|.env;*.env;wiola_env.txt;*.txt|Wszystkie pliki (*.*)|*.*'
+# domyslnie pierwsza dostepna litera dysku usuwalnego
+$removable = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=2" | Select-Object -First 1
+if ($removable) { $dlg.InitialDirectory = $removable.DeviceID + '\' }
+$dlg.RestoreDirectory = $true
+
+$envBackup = "$env:TEMP\wiola_env.bak"
+if ($dlg.ShowDialog() -eq 'OK') {
+    $envSource = $dlg.FileName
+    Ok "Wybrano: $envSource"
+} elseif (Test-Path $envBackup) {
+    $envSource = $envBackup
+    Ok "Nie wybrano pliku - zostaje obecny .env"
+} else {
+    Fail "Bez pliku .env nie da sie zainstalowac (klucze QBO, Anthropic, MySQL, token GitHub)."
+}
+
+$GH_TOKEN = Get-EnvValue $envSource 'GITHUB_TOKEN'
+$addTokenToEnv = $false
+if (-not $GH_TOKEN) {
+    Warn "W .env brak GITHUB_TOKEN (repozytorium jest prywatne)."
+    $GH_TOKEN = (Read-Host "Wklej token GitHub od Patryka i nacisnij Enter").Trim()
+    if (-not $GH_TOKEN) { Fail "Bez tokena GitHub nie da sie pobrac kodu." }
+    $addTokenToEnv = $true
+}
+Ok "Token GitHub jest"
+
+# --- 3. download project ZIP from GitHub ---------------------------------
+Step 3 9 "Pobieranie kodu z GitHub"
 $repoZip = "$env:TEMP\wiola_repo.zip"
 try {
-    Invoke-WebRequest -Uri $REPO_ZIP_URL -OutFile $repoZip -UseBasicParsing
+    Invoke-WebRequest -Uri $REPO_ZIP_URL -Headers (GitHubHeaders $GH_TOKEN) -OutFile $repoZip -UseBasicParsing
 } catch {
-    Fail "Nie udalo sie pobrac z GitHub: $($_.Exception.Message)"
+    Fail "Nie udalo sie pobrac z GitHub: $(GitHubError $_)"
 }
 Ok "Pobrano $([math]::Round((Get-Item $repoZip).Length/1MB,1)) MB"
 
@@ -66,7 +122,7 @@ Write-Host "       Rozpakowywanie..."
 $tmpExtract = "$env:TEMP\wiola_extract"
 if (Test-Path $tmpExtract) { Remove-Item $tmpExtract -Recurse -Force }
 Expand-Archive -Path $repoZip -DestinationPath $tmpExtract -Force
-# repo extracts as wiola-helper-main/ — move contents up one level
+# repo extracts as tryk016-wiola-helper-<sha>/ — move contents up one level
 $repoRoot = Get-ChildItem $tmpExtract -Directory | Select-Object -First 1
 Get-ChildItem $repoRoot.FullName -Force | ForEach-Object {
     $dest = Join-Path $ROOT $_.Name
@@ -78,11 +134,17 @@ Get-ChildItem $repoRoot.FullName -Force | ForEach-Object {
 Remove-Item $tmpExtract -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $repoZip -Force -ErrorAction SilentlyContinue
 
-# Restore backed-up env/magemar
-if (Test-Path "$env:TEMP\wiola_env.bak") {
-    Move-Item "$env:TEMP\wiola_env.bak" "$ROOT\system\.env" -Force
-    Ok "Przywrocono stare .env"
+# Put .env in place (picked file, or the one saved from the old install)
+if ($envSource -eq $envBackup) {
+    Move-Item $envBackup "$ROOT\system\.env" -Force
+} else {
+    Copy-Item $envSource "$ROOT\system\.env" -Force
+    Remove-Item $envBackup -Force -ErrorAction SilentlyContinue
 }
+if ($addTokenToEnv) {
+    Add-Content -Path "$ROOT\system\.env" -Value "`r`nGITHUB_TOKEN=$GH_TOKEN" -Encoding ASCII
+}
+Ok "Plik .env -> $ROOT\system\.env"
 if (Test-Path "$env:TEMP\wiola_magemar.bak") {
     Move-Item "$env:TEMP\wiola_magemar.bak" "$ROOT\magemar.xlsx" -Force
     Ok "Przywrocono magemar.xlsx"
@@ -91,15 +153,15 @@ Ok "Kod zainstalowany w $ROOT"
 
 # Record installed commit SHA for in-app update check
 try {
-    $commitInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/$REPO_BRANCH" -Headers @{ 'User-Agent' = 'WiolaHelper' } -TimeoutSec 10
+    $commitInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO_USER/$REPO_NAME/commits/$REPO_BRANCH" -Headers (GitHubHeaders $GH_TOKEN) -TimeoutSec 10
     Set-Content -Path "$ROOT\.version" -Value $commitInfo.sha -Encoding ASCII -NoNewline
     Ok "Zapisano wersje: $($commitInfo.sha.Substring(0,8))"
 } catch {
     Warn "Nie udalo sie odczytac SHA z GitHub: $($_.Exception.Message)"
 }
 
-# --- 3. download Node.js portable ----------------------------------------
-Step 3 9 "Pobieranie Node.js $NODE_VERSION (portable)"
+# --- 4. download Node.js portable ----------------------------------------
+Step 4 9 "Pobieranie Node.js $NODE_VERSION (portable)"
 $nodeDir = "$ROOT\nodejs"
 if (Test-Path "$nodeDir\node.exe") {
     Ok "Node.js juz zainstalowany w $nodeDir"
@@ -118,24 +180,24 @@ $nodeVer = & "$nodeDir\node.exe" --version
 $npmVer  = & "$nodeDir\npm.cmd"  --version
 Ok "node $nodeVer / npm $npmVer"
 
-# --- 4. npm install in system/ -------------------------------------------
-Step 4 9 "Instalacja zaleznosci systemowych (Anthropic, MySQL, ExcelJS...)"
+# --- 5. npm install in system/ -------------------------------------------
+Step 5 9 "Instalacja zaleznosci systemowych (Anthropic, MySQL, ExcelJS...)"
 Push-Location "$ROOT\system"
 & "$nodeDir\npm.cmd" install --silent --no-audit --no-fund --omit=dev 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail "npm install failed in system\" }
 Pop-Location
 Ok "system\node_modules zainstalowane"
 
-# --- 5. npm install in wiola-helper/ -------------------------------------
-Step 5 9 "Instalacja zaleznosci GUI (Electron, React, Vite...)"
+# --- 6. npm install in wiola-helper/ -------------------------------------
+Step 6 9 "Instalacja zaleznosci GUI (Electron, React, Vite...)"
 Push-Location "$ROOT\wiola-helper"
 & "$nodeDir\npm.cmd" install --silent --no-audit --no-fund 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail "npm install failed in wiola-helper\" }
 Pop-Location
 Ok "wiola-helper\node_modules zainstalowane"
 
-# --- 6. build Wiola Helper (Vite only — pomijamy electron-builder przez symlink issue) ---
-Step 6 9 "Budowanie aplikacji (Vite + Electron main/preload compile)"
+# --- 7. build Wiola Helper (Vite only — pomijamy electron-builder przez symlink issue) ---
+Step 7 9 "Budowanie aplikacji (Vite + Electron main/preload compile)"
 Push-Location "$ROOT\wiola-helper"
 # Vite wypisuje ostrzezenie "CJS build deprecated" na stderr. Przy EAP=Stop
 # zlaczenie 2>&1 zamienia to ostrzezenie w blad terminujacy, mimo ze build sie
@@ -150,26 +212,6 @@ if (-not (Test-Path "$ROOT\wiola-helper\dist\index.html")) {
     Fail "Build sie nie powiodl - brak dist\index.html (zobacz komunikaty wyzej)."
 }
 Ok "Aplikacja zbudowana (dist\ + dist-electron\)"
-
-# --- 7. .env picker ------------------------------------------------------
-Step 7 9 "Wskaz plik .env z pendrive"
-Add-Type -AssemblyName System.Windows.Forms
-$dlg = New-Object System.Windows.Forms.OpenFileDialog
-$dlg.Title  = 'Wybierz plik .env z pendrive (od Patryka)'
-$dlg.Filter = 'Plik .env|.env;*.env;wiola_env.txt;*.txt|Wszystkie pliki (*.*)|*.*'
-# domyslnie pierwsza dostepna litera dysku usuwalnego
-$removable = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=2" | Select-Object -First 1
-if ($removable) { $dlg.InitialDirectory = $removable.DeviceID + '\' }
-$dlg.RestoreDirectory = $true
-
-if ($dlg.ShowDialog() -ne 'OK') {
-    Warn "Nie wybrano pliku - .env trzeba bedzie skonfigurowac recznie pozniej."
-    Warn "Otwarcie Wioli > Ustawienia > wpisz tokeny QBO i ANTHROPIC_API_KEY."
-} else {
-    $src = $dlg.FileName
-    Copy-Item $src "$ROOT\system\.env" -Force
-    Ok "Skopiowano: $src -> $ROOT\system\.env"
-}
 
 # --- 8. working folders --------------------------------------------------
 Step 8 9 "Tworzenie folderow roboczych"

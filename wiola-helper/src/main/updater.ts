@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import axios from 'axios';
+import { readEnv } from './settings';
 
 const VERSION_FILE = 'C:\\kreisel\\.version';
 const UPDATE_PS1   = 'C:\\kreisel\\update_wiola.ps1';
@@ -37,9 +38,15 @@ export function getLocalSha(): string | undefined {
 
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
   const localSha = getLocalSha();
+  // The repo is private — without GITHUB_TOKEN the API answers 404.
+  const token = readEnv().GITHUB_TOKEN;
   try {
     const r = await axios.get(REPO_API_URL, {
-      headers: { 'User-Agent': 'WiolaHelper', Accept: 'application/vnd.github+json' },
+      headers: {
+        'User-Agent': 'WiolaHelper',
+        Accept: 'application/vnd.github+json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
       timeout: 10000,
     });
     const remoteSha: string = r.data?.sha;
@@ -57,12 +64,15 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
     };
   } catch (e) {
     const err = e as Error & { response?: { status?: number } };
+    const status = err.response?.status;
     return {
       hasUpdate: false,
       localSha,
-      error: err.response?.status
-        ? `GitHub API ${err.response.status}`
-        : err.message,
+      error: status === 401 || status === 403 || status === 404
+        ? `GitHub ${status} — brak dostępu do repozytorium. ${token ? 'Token GitHub wygasł albo nie ma dostępu' : 'Brak tokena GitHub'} — wpisz token w sekcji „Token GitHub” powyżej.`
+        : status
+          ? `GitHub API ${status}`
+          : err.message,
     };
   }
 }

@@ -19,6 +19,7 @@ interface EnvData {
   QBO_EWISTORE_REALM_ID?: string;
   QBO_EWIPRO_REFRESH_TOKEN?: string;
   QBO_EWISTORE_REFRESH_TOKEN?: string;
+  GITHUB_TOKEN?: string;
   // Anthropic + MySQL — konfigurowane przez administratora bezpośrednio w .env
 }
 
@@ -273,6 +274,11 @@ export function SettingsView({ onClose }: Props) {
               </div>
             </div>
           </div>
+        </Section>
+
+        {/* GitHub token — the repo is private, updates need it */}
+        <Section title="🔑 Token GitHub" subtitle="Potrzebny do aktualizacji (repozytorium jest prywatne). Nowy token dostaniesz od Patryka.">
+          <Field label="GITHUB_TOKEN" value={dirty.GITHUB_TOKEN ?? env.GITHUB_TOKEN} onChange={v => setField('GITHUB_TOKEN', v)} mono secret />
         </Section>
 
         {/* Aktualizacje */}
