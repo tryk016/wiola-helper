@@ -177,25 +177,30 @@ async function defaultTemplateRefs(client) {
   return chosen;
 }
 
-// Create a missing Item. Clones Type + account + VAT refs from a same-family
-// sibling (e.g. PIGMENT-D-105 ← PIGMENT-D-104) when one exists, else from the
-// catalog's dominant account template. Returns the new Id (or null on failure).
-async function createMissingItem(client, rawName) {
-  const newName = cleanItemName(rawName);
-  if (!newName || newName.startsWith('__')) return null;       // never create markers / empty
-
+// The Item whose Type + account + VAT refs a new Item called `newName` should
+// clone in this realm: a same-family sibling (e.g. PIGMENT-D-105 ← PIGMENT-D-104)
+// when one exists, else the catalog's dominant account template. Null if none.
+async function pickItemTemplate(client, newName) {
   // Prefer a same-family sibling (most accurate accounts).
-  let tmpl = null;
   const family = newName.replace(/[-\s][^-\s]*$/, '').trim();
   if (family && family !== newName) {
     const q = await client.query(`SELECT * FROM Item WHERE Name LIKE '${family.replace(/'/g, "\\'")}%' MAXRESULTS 10`);
     const sibs = (q.QueryResponse.Item || []).filter(
       it => (it.Name || '').toUpperCase() !== newName.toUpperCase() && it.IncomeAccountRef
     );
-    if (sibs.length) tmpl = sibs[0];
+    if (sibs.length) return sibs[0];
   }
   // Fall back to the catalog's standard account template so any product creates.
-  if (!tmpl) tmpl = await defaultTemplateRefs(client);
+  return defaultTemplateRefs(client);
+}
+
+// Create a missing Item, cloning refs from pickItemTemplate().
+// Returns the new Id (or null on failure).
+async function createMissingItem(client, rawName) {
+  const newName = cleanItemName(rawName);
+  if (!newName || newName.startsWith('__')) return null;       // never create markers / empty
+
+  const tmpl = await pickItemTemplate(client, newName);
   if (!tmpl) return null;
 
   const body = { Name: newName, Type: tmpl.Type || 'Service' };
@@ -559,6 +564,7 @@ module.exports = {
   attachPdfBufferToTxn,
   getEntityId,
   getItemId,
+  pickItemTemplate,
   getAccountId,
   resolveTaxCode,
   resolveSalesTaxCode,

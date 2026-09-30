@@ -85,3 +85,23 @@ export interface Health {
   magemar: { ok: boolean; age_hours: number; path: string };
   qbo: { pro: string; store: string; env: string };
 }
+
+// A Pro product in the Pro → Store export picker (system/qbo_items_sync.js).
+export interface ProductRow {
+  id: string;
+  name: string;
+  fullName: string;
+  sku: string;
+  type: string;
+  description: string;
+  parentName: string | null;
+  inStore: boolean;
+}
+
+export interface ProductExportResult {
+  id: string;
+  name: string;
+  status: 'created' | 'exists' | 'error';
+  storeId?: string;
+  message?: string;
+}

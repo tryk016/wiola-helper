@@ -18,6 +18,7 @@ interface QueueState {
   historyViewOpen: boolean;
   settingsOpen: boolean;
   logOpen: boolean;
+  productsOpen: boolean;
 
   setState: (s: { queue: Invoice[]; pending: Invoice[]; history?: Invoice[] }) => void;
   setHealth: (h: Health | null) => void;
@@ -31,6 +32,7 @@ interface QueueState {
   toggleHistoryView: (open?: boolean) => void;
   toggleSettings: (open?: boolean) => void;
   toggleLog: (open?: boolean) => void;
+  toggleProducts: (open?: boolean) => void;
 }
 
 export interface UnmappedLine {
@@ -62,6 +64,7 @@ export const useStore = create<QueueState>((set) => ({
   historyViewOpen: false,
   settingsOpen: false,
   logOpen: false,
+  productsOpen: false,
 
   setState: ({ queue, pending, history }) => set({ queue, pending, ...(history !== undefined && { history }) }),
   setHealth: (h) => set({ health: h }),
@@ -75,4 +78,5 @@ export const useStore = create<QueueState>((set) => ({
   toggleHistoryView: (open) => set((s) => ({ historyViewOpen: open ?? !s.historyViewOpen })),
   toggleSettings: (open) => set((s) => ({ settingsOpen: open ?? !s.settingsOpen })),
   toggleLog: (open) => set((s) => ({ logOpen: open ?? !s.logOpen })),
+  toggleProducts: (open) => set((s) => ({ productsOpen: open ?? !s.productsOpen })),
 }));

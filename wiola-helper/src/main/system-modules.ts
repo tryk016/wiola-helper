@@ -70,6 +70,7 @@ export const getRate = require(`${SYSTEM_PATH}/hmrc_rate.js`).getRate as
 
 export const qboClient = require(`${SYSTEM_PATH}/qbo_client.js`);
 export const qboPayloads = require(`${SYSTEM_PATH}/qbo_payloads.js`);
+export const qboItemsSync = require(`${SYSTEM_PATH}/qbo_items_sync.js`);
 export const magemarLookup = require(`${SYSTEM_PATH}/magemar_lookup.js`);
 
 // PLN→GBP line math (same formulas the QBO Invoice build uses) — for live

@@ -14,6 +14,7 @@ import { ConfirmTransportModal } from './components/ConfirmTransportModal';
 import { HistoryView } from './components/HistoryView';
 import { SettingsView } from './components/SettingsView';
 import { LogView } from './components/LogView';
+import { ProductsView } from './components/ProductsView';
 import { useStore, type ResolvedPending, type UnmappedLine, type DuplicateItem } from './store';
 import type { Invoice, Health } from './types';
 
@@ -185,6 +186,12 @@ export function App() {
         </div>
         <div className="flex items-center gap-4">
           <button
+            onClick={() => store.toggleProducts(true)}
+            className="hover:text-slate-200 transition-colors flex items-center gap-1"
+          >
+            📦 Produkty Pro → Store
+          </button>
+          <button
             onClick={() => store.toggleLog(true)}
             className="hover:text-slate-200 transition-colors flex items-center gap-1"
           >
@@ -262,6 +269,9 @@ export function App() {
       )}
       {store.logOpen && (
         <LogView onClose={() => store.toggleLog(false)} />
+      )}
+      {store.productsOpen && (
+        <ProductsView onClose={() => store.toggleProducts(false)} />
       )}
     </div>
   );

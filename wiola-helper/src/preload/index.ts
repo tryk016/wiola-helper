@@ -35,6 +35,10 @@ const api = {
   readLog: (lines?: number) => ipcRenderer.invoke('log:read', lines),
 
   qboLogin: (role: 'pro' | 'store') => ipcRenderer.invoke('qbo:oauthLogin', role),
+
+  // Products Pro → Store
+  productsList: () => ipcRenderer.invoke('products:list'),
+  productsExport: (ids: string[]) => ipcRenderer.invoke('products:export', ids),
   getQueue: () => ipcRenderer.invoke('queue:state'),
   scanAll: () => ipcRenderer.invoke('queue:scanAll'),
   uploadAll: (post: boolean) => ipcRenderer.invoke('queue:uploadAll', post),
@@ -59,7 +63,7 @@ const api = {
 
   // Event subscription
   on: (channel: string, cb: (...args: unknown[]) => void): (() => void) | undefined => {
-    const allowed = ['queue:state', 'modal:unknownSku', 'modal:pendingResolved', 'modal:duplicates'];
+    const allowed = ['queue:state', 'modal:unknownSku', 'modal:pendingResolved', 'modal:duplicates', 'products:progress'];
     if (!allowed.includes(channel)) return undefined;
     const listener = (_: unknown, ...args: unknown[]) => cb(...args);
     ipcRenderer.on(channel, listener);

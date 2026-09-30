@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { InvoiceQueue, type InvoiceState } from './queue';
 import { scanInvoice, uploadInvoice } from './pipeline';
-import { qboClient, magemarLookup } from './system-modules';
+import { qboClient, qboItemsSync, magemarLookup } from './system-modules';
 import { maskedEnv, writeEnv, readPrefs, writePrefs, type EnvVars, type AppPrefs } from './settings';
 import { startOauthFlow } from './qbo-oauth';
 import { checkForUpdate, applyUpdate, getLocalSha } from './updater';
@@ -478,6 +478,58 @@ ipcMain.handle('settings:setPrefs', (_, updates: Partial<AppPrefs>) => writePref
 ipcMain.handle('qbo:oauthLogin', async (_, role: 'pro' | 'store') => {
   if (!mainWindow) throw new Error('Main window unavailable');
   return await startOauthFlow(mainWindow, role);
+});
+
+// Products Pro → Store. The last Pro listing is kept so the export works on
+// exactly the Items the user ticked (parent categories resolved from it too).
+let lastProItems: unknown[] = [];
+let productsExportRunning = false;
+
+function productsErrorText(e: unknown): string {
+  const err = e as {
+    message?: string;
+    response?: { data?: { error?: string; Fault?: { Error?: Array<{ Message?: string; Detail?: string }> } } };
+  };
+  const data = err.response?.data;
+  if (data?.error === 'invalid_grant' || /REFRESH_TOKEN missing/.test(err.message || '')) {
+    return 'Token QBO wygasł albo go brak — zaloguj się ponownie w Ustawieniach → Logowanie do QBO.';
+  }
+  const f = data?.Fault?.Error?.[0];
+  if (f) return [f.Message, f.Detail].filter(Boolean).join(': ');
+  return err.message || String(e);
+}
+
+ipcMain.handle('products:list', async () => {
+  try {
+    const pro = await qboClient.getClient('pro');
+    const store = await qboClient.getClient('store');
+    const [proItems, storeItems] = await Promise.all([qboItemsSync.listItems(pro), qboItemsSync.listItems(store)]);
+    lastProItems = proItems;
+    return { ok: true, rows: qboItemsSync.compareCatalogs(proItems, storeItems) };
+  } catch (e) {
+    return { ok: false, error: productsErrorText(e) };
+  }
+});
+
+ipcMain.handle('products:export', async (_, ids: string[]) => {
+  if (productsExportRunning) return { ok: false, error: 'Eksport już trwa.' };
+  productsExportRunning = true;
+  try {
+    const store = await qboClient.getClient('store');
+    const results = await qboItemsSync.exportToStore({
+      storeClient: store,
+      proItems: lastProItems,
+      ids,
+      onProgress: (r: unknown) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('products:progress', r);
+      },
+    });
+    return { ok: true, results };
+  } catch (e) {
+    return { ok: false, error: productsErrorText(e) };
+  } finally {
+    productsExportRunning = false;
+  }
 });
 
 ipcMain.handle('shell:openPath', (_, p: string) => {

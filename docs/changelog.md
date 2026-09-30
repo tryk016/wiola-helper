@@ -7,7 +7,16 @@ layout: default
 
 Lista wszystkich znaczących zmian, od początku projektu.
 
-## Najnowsze (czerwiec 2026)
+## Wrzesień 2026
+
+### 📦 Eksport produktów EWI Pro → EWI Store
+- Nowy ekran **„📦 Produkty Pro → Store”** (stopka): lista aktywnych produktów z QBO EWI Pro, checkboxy, „Zaznacz / Odznacz wszystkie”, wyszukiwarka, filtr „tylko brakujące w Store”
+- **„Wyślij do EWI Store”** zakłada zaznaczone produkty po kolei, z wynikiem ✓ / ✗ przy każdym wierszu
+- Kopiowane: nazwa, SKU, opisy, typ (Inventory → NonInventory). Konta + VAT z szablonu w Store (`pickItemTemplate`, wspólny z auto-create przy fakturach). Kategoria, jeśli istnieje w Store. Bez cen
+- Tylko tworzenie: istniejące produkty w Store nie są zmieniane; duplikaty nazw pomijane
+- Logika w `system/qbo_items_sync.js` + testy `node --test qbo_items_sync.test.js`
+
+## Czerwiec 2026
 
 ### 🚀 Hybrid parser + double-parse elimination
 - **Hybrid parser** (`parse_kreisel_llm.js`): text-layer detection via pdf-parse, Claude **text-only** dla text PDFs (~7s, ~50% mniej tokens), Claude **vision** dla skanów (~40s, fallback)

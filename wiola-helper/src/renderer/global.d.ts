@@ -43,6 +43,8 @@ interface WiolaApi {
     warning?: string;
     error?: string;
   }>;
+  productsList: () => Promise<{ ok: boolean; rows?: import('./types').ProductRow[]; error?: string }>;
+  productsExport: (ids: string[]) => Promise<{ ok: boolean; results?: import('./types').ProductExportResult[]; error?: string }>;
   getQueue: () => Promise<unknown>;
   scanAll: () => Promise<{ scanned: number }>;
   uploadAll: (post: boolean) => Promise<{ processed: number; halted?: boolean; haltedAt?: string }>;
