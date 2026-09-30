@@ -20,13 +20,19 @@ Na komputerze wszystko ląduje w `C:\kreisel\`.
 
 ## 2. Co dostajesz od Patryka
 
-Pendrive z plikami:
+Pendrive albo paczka ZIP (`Wiola-Helper-IT-*.zip`) z plikami:
+
+| Plik | Po co |
+|---|---|
+| `setup_wiola.cmd` + `setup_wiola.ps1` | instalator (muszą leżeć obok siebie) |
+| `update_wiola.ps1` | do jednorazowej podmiany na starszych instalacjach (punkt 4) |
+| `INSTRUKCJA_IT.md` | ta instrukcja |
+
+**Osobno** (pendrive albo inny bezpieczny kanał — nigdy w ZIP-ie wysłanym mailem):
 
 | Plik | Po co |
 |---|---|
 | `.env` | klucze API, hasła i token GitHub (`GITHUB_TOKEN=...`) — **poufny** |
-| `setup_wiola.cmd` + `setup_wiola.ps1` | instalator (muszą leżeć obok siebie) |
-| `update_wiola.ps1` | do jednorazowej podmiany na starszych instalacjach (punkt 4) |
 
 Plus loginy do QuickBooks Online (EWI Pro i EWI Store) dla osoby, która będzie korzystać z aplikacji.
 
@@ -36,14 +42,14 @@ Plus loginy do QuickBooks Online (EWI Pro i EWI Store) dla osoby, która będzie
 
 ## 3. Pierwsza instalacja (nowy komputer, ok. 10 min)
 
-1. Włóż pendrive.
-2. Na pendrive kliknij prawym na `setup_wiola.cmd` → **Otwórz**
+1. Rozpakuj ZIP (albo włóż pendrive) i włóż pendrive z `.env`.
+2. Kliknij prawym na `setup_wiola.cmd` → **Otwórz**
    (jeśli SmartScreen ostrzeże → *Więcej informacji → Uruchom mimo to*).
-3. Krok 2 z 9: okno **„Wybierz plik .env z pendrive”** → wskaż `.env` na pendrive → **OK**.
+3. Krok 2 z 9: okno **„Wybierz plik .env z pendrive”** → wskaż `.env` → **OK**.
    (Jeśli w `.env` nie ma tokena GitHub, skrypt poprosi o wklejenie go w czarnym oknie.)
 4. Dalej samo: pobranie kodu z GitHuba, Node.js, instalacja bibliotek, budowanie aplikacji.
 5. Na końcu: **GOTOWE!** i skrót **„Wiola Helper”** na pulpicie oraz w Menu Start.
-6. Wyjmij pendrive — `.env` jest już skopiowany do `C:\kreisel\system\.env`.
+6. Wyjmij pendrive — `.env` jest już skopiowany do `C:\kreisel\system\.env`. Rozpakowany folder z ZIP-a można usunąć.
 
 Na komputerze, na którym Wiola Helper **już działa**, nie instaluj od nowa — użyj aktualizacji (punkt 4).
 Instalator nadpisałby `.env` wersją z pendrive i trzeba by ponownie logować się do QuickBooks.
@@ -55,7 +61,7 @@ Instalator nadpisałby `.env` wersją z pendrive i trzeba by ponownie logować s
 Repozytorium jest teraz prywatne, a stary skrypt aktualizacji nie zna tokena, więc raz trzeba go podmienić:
 
 1. Zamknij Wiola Helper.
-2. Skopiuj `update_wiola.ps1` z pendrive do `C:\kreisel\` (zastąp istniejący plik).
+2. Skopiuj `update_wiola.ps1` (z ZIP-a albo pendrive'a) do `C:\kreisel\` (zastąp istniejący plik).
 3. Dwuklik `C:\kreisel\update_wiola.cmd`.
 4. Skrypt zapyta o **token GitHub** → wklej go (linijka `GITHUB_TOKEN=` z `.env` na pendrive, bez `GITHUB_TOKEN=`)
    → Enter. Token zapisze się w `C:\kreisel\system\.env`.
